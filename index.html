@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroStation</title>
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <link rel="preload" href="Fondos/3ds.jpg" as="image"> 
+    
+    <link rel="icon" href="Icons/favicon.png" type="image/png">
+</head>
+<body>
+    
+    <div id="background-container"></div>
+    
+    <div id="rueda" class="rueda">
+    </div>
+    
+    <div id="modal-overlay" class="modal-overlay">
+        <div id="modal-content" class="modal-content">
+            <div id="modal-header" class="modal-header">
+                <img id="modal-image" src="" alt="Imagen de sistema">
+                <button id="modal-close" class="modal-close">
+                    <img src="Icons/back.svg" alt="Atrás" title="Cerrar menú">
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div id="content-grid-container" class="content-grid-container">
+                    </div>
+                <h2 id="modal-title" style="display: none;"></h2>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-details-overlay" class="game-details-overlay">
+        <div id="game-details-content" class="game-details-content">
+            
+            <button id="game-details-close" class="game-details-close">
+                <img src="Icons/back.svg" alt="Atrás" title="Cerrar detalles">
+            </button>
+
+            <div class="game-details-header">
+                <img id="game-details-image" src="" alt="Portada del juego">
+            </div>
+
+            <h3 id="game-details-title" class="game-details-title"></h3>
+
+            <div id="game-details-body" class="game-details-body">
+                <button class="download-button">
+                    Descargar Juego
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="data.js"></script> 
+    <script src="script.js"></script>
+</body>
+</html>
