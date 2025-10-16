@@ -121,6 +121,7 @@ body {
     object-fit: contain; 
     
     transition: transform 0.3s ease-out, filter 0.3s ease-out; 
+    /* 🚀 OPTIMIZACIÓN: Mantener will-change para una animación más fluida */
     will-change: transform, filter; 
     /* CORRECCIÓN: Fuerza la aceleración de hardware para la nitidez del SVG */
     transform: translateZ(0); 
@@ -269,8 +270,7 @@ body {
     background-color: var(--color-bg-modal); 
     /* Se elimina scroll-behavior: smooth para controlarlo totalmente por JS */
     
-    /* 🚀 OPTIMIZACIÓN: Indica que la posición de scroll cambiará */
-    will-change: scroll-position;
+    /* ❌ OPTIMIZACIÓN: Eliminamos will-change: scroll-position; ya que es ineficaz o incluso perjudicial en scroll nativo */
 }
 
 /* ESTILOS PARA EL GRID DE CONTENIDO (ADAPTACIÓN DE RESOLUCIÓN) */
@@ -370,7 +370,8 @@ body {
     border-radius: 8px;
     overflow: hidden; 
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-    /* 🚀 will-change aquí no es necesario ya que se usa en el hover/select */
+    /* 🚀 OPTIMIZACIÓN: Pre-promocionar el elemento para una transición suave en hover/select */
+    will-change: transform, box-shadow; 
     transition: transform 0.2s ease, box-shadow 0.2s ease; 
     cursor: pointer;
     
@@ -384,7 +385,7 @@ body {
     transform: translateY(-5px); 
     /* 🟢 Mantenemos el RGBA con el color del acento */
     box-shadow: 0 0 15px rgba(255, 165, 0, 0.6); 
-    will-change: transform, box-shadow; /* 🚀 OPTIMIZACIÓN: Añadir will-change en la selección */
+    /* ❌ OPTIMIZACIÓN: Eliminamos will-change de aquí ya que se movió al selector base */
 }
 
 /* Adaptabilidad de la imagen */
