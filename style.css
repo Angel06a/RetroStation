@@ -126,13 +126,13 @@ body {
     /* 🚀 OPTIMIZACIÓN GPU: Mantener will-change para una animación más fluida */
     will-change: transform, filter; 
     /* 🚀 OPTIMIZACIÓN GPU: Fuerza la aceleración de hardware (capa de composición) */
-    transform: translateZ(0); 
+    transform: translate3d(0, 0, 0); 
 }
 
 /* Elemento Seleccionado: Desplazado 30px a la derecha */
 .opcion.seleccionada img {
-    /* 🚀 MODIFICACIÓN: Se agrega translateZ(0) al final para asegurar la capa de composición */
-    transform: scale(1.3) translateX(30px) translateZ(0); 
+    /* 🚀 OPTIMIZACIÓN GPU: Se usa translate3d(0, 0, 0) */
+    transform: scale(1.3) translateX(30px) translate3d(0, 0, 0); 
     filter: drop-shadow(0px 4px 15px rgba(0, 0, 0, 0.6)); 
 }
 
@@ -375,6 +375,7 @@ body {
     overflow: hidden; 
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
     /* 🚀 OPTIMIZACIÓN GPU: Pre-promocionar el elemento para una transición suave en hover/select */
+    /* 💥 OPTIMIZACIÓN: Se consolida will-change */
     will-change: transform, box-shadow; 
     transition: transform 0.2s ease, box-shadow 0.2s ease; 
     cursor: pointer;
@@ -382,17 +383,18 @@ body {
     /* 💥 MODIFICACIÓN CLAVE: Mantiene la altura del item según su contenido */
     align-self: start; 
     /* 🚀 AGREGADO GPU: Fuerza la aceleración de hardware para la base */
-    transform: translateZ(0); 
+    /* 💥 OPTIMIZACIÓN: Se usa translate3d para consistencia */
+    transform: translate3d(0, 0, 0); 
 }
 
 /* Reutilización de estilos para el estado seleccionado por teclado */
 .grid-item:hover,
 .grid-item.selected { /* Clase para selección por teclado */
     /* 🚀 MODIFICACIÓN GPU: Asegura el uso de la GPU para la animación */
-    transform: translateY(-5px) translateZ(0); 
+    /* 💥 OPTIMIZACIÓN: Se usa translate3d(0, 0, 0) para consistencia */
+    transform: translateY(-5px) translate3d(0, 0, 0); 
     /* 🟢 Mantenemos el RGBA con el color del acento */
     box-shadow: 0 0 15px rgba(255, 165, 0, 0.6); 
-    /* ❌ OPTIMIZACIÓN: Eliminamos will-change de aquí ya que se movió al selector base */
 }
 
 /* Adaptabilidad de la imagen */
@@ -437,8 +439,8 @@ body {
 }
 
 .game-details-content {
-    /* 🟢 Uso de variables */
-    background-color: rgba(34, 34, 34, 0.95); /* El color #222 se podría sustituir */
+    /* 🟢 Uso de variables (Fondo oscuro y TRASLÚCIDO) */
+    background-color: rgba(34, 34, 34, 0.95);
     color: var(--color-text-light);
     width: 90%;
     max-width: 400px; /* Tamaño más pequeño */
@@ -487,7 +489,8 @@ body {
     overflow: hidden;
     border-radius: 8px;
     margin-bottom: 15px;
-    box-shadow: 0 4-box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    /* 💥 OPTIMIZACIÓN: Se corrige el error de duplicación en box-shadow */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
 #game-details-image {
@@ -557,11 +560,10 @@ body {
 @media (max-width: 768px) {
 
     body { 
-        /* Permitir el scroll en el body si la cinta excede el alto */
-        overflow-y: auto !important;
-        /* Los sistemas inician desde arriba en lugar de centrarse */
-        align-items: flex-start !important; 
-        justify-content: center !important;
+        /* 💥 OPTIMIZACIÓN: Se puede usar solo flex-start para body, no necesita !important si la base está en flex */
+        overflow-y: auto !important; /* Permitir el scroll en el body si la cinta excede el alto */
+        align-items: flex-start; 
+        justify-content: center;
     }
     
     /* 1. Contenedor principal (#rueda) */
@@ -589,20 +591,22 @@ body {
         /* Permitir el scroll en el contenedor interno */
         overflow-y: scroll !important;
         overflow-x: hidden !important;
+        /* max-height: 100vh es redundante si body tiene overflow-y: auto, pero se mantiene por si acaso */
         max-height: 100vh;
     }
 
     /* 2. Opciones individuales dentro de la cinta (.opcion) */
     .opcion {
         /* Sobrescribir las posiciones circulares forzadas por JS */
-        position: relative !important;
+        /* 💥 OPTIMIZACIÓN: position: relative ya está en la base, no necesita !important si no hay conflicto */
+        position: relative; 
         left: auto !important;
         top: auto !important;
         transform: none !important; 
         
-        /* *** Invisibilidad y Tamaño Fijo para el Icono *** */
-        width: 100px !important; 
-        height: 100px !important; 
+        /* Contenedor grande */
+        width: 150px !important; 
+        height: 150px !important; 
         margin-bottom: 5px; 
         
         /* Fondo completamente invisible */
@@ -612,7 +616,8 @@ body {
         padding: 0;
         
         /* Asegurar que el contenido (el SVG) esté centrado */
-        display: flex !important;
+        /* 💥 OPTIMIZACIÓN: display: flex ya está en la base, no necesita !important */
+        display: flex;
         justify-content: center;
         align-items: center;
         
@@ -621,9 +626,10 @@ body {
     
     /* 3. Estilo para la imagen del sistema (SVG) */
     .opcion img {
-        width: 80px !important; 
-        height: 80px !important;
-        min-width: 80px; 
+        /* Imagen grande */
+        width: 130px !important; 
+        height: 130px !important;
+        min-width: 130px; 
         margin: 0 !important; 
         object-fit: contain;
         transform: none !important; 
@@ -636,12 +642,14 @@ body {
         background-color: transparent !important; 
         transform: none !important;
         box-shadow: none !important;
+        /* 💥 OPTIMIZACIÓN: z-index se quita, es irrelevante en la cinta vertical */
+        z-index: auto !important; 
     }
     
     /* Realzar el icono seleccionado */
     .opcion.seleccionada img {
-         /* 🚀 MODIFICACIÓN GPU: Asegura el uso de la GPU para la animación */
-         transform: scale(1.2) translateZ(0) !important; 
+         /* 🚀 MODIFICACIÓN GPU: Se usa translate3d(0, 0, 0) para consistencia */
+         transform: scale(1.2) translate3d(0, 0, 0) !important; 
          /* Usar un filtro de sombra con el color de acento */
          filter: drop-shadow(0 0 10px var(--color-accent)) !important;
     }
@@ -650,5 +658,27 @@ body {
     .opcion::after {
         content: none !important; 
         display: none !important;
+    }
+
+    /* ----------------------------------------------------- */
+    /* *** MODIFICACIÓN: Reducir tamaño de SVG en Encabezado Móvil *** */
+    /* ----------------------------------------------------- */
+
+    /* Icono del Sistema (Centrado) */
+    #modal-image {
+        height: 60px !important; 
+        /* *** NUEVO: Limitar el ancho para evitar colisión con el botón de cierre *** */
+        max-width: calc(100% - 100px); 
+        width: auto !important; 
+    }
+    
+    /* Botón de Cierre (Ícono Atrás) */
+    .modal-close {
+        left: 10px !important; 
+    }
+    
+    .modal-close img {
+        width: 40px !important; 
+        height: 40px !important;
     }
 }
