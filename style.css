@@ -1,0 +1,536 @@
+/* Estilos CSS */
+
+/* 🟢 OPTIMIZACIÓN 6: Box-Sizing Global para un Layout Robusto */
+html {
+    box-sizing: border-box;
+}
+*, *::before, *::after {
+    box-sizing: inherit;
+}
+
+/* 🟢 OPTIMIZACIÓN 3: Variables CSS para Mantenibilidad y Temas */
+:root {
+    --color-bg-base: #333;
+    --color-bg-modal: #222;
+    --color-bg-darkest: #1a1a1a;
+    --color-text-light: #f1f1f1;
+    --color-text-white: #fff;
+    /* 🟢 OPTIMIZACIÓN 4: Nuevo color para el texto sobre fondos claros */
+    --color-text-dark: #1a1a1a; 
+    --color-accent: #FFA500;
+    --color-accent-hover: #FF8C00;
+    
+    /* 🟢 OPTIMIZACIÓN 4: Nuevo color gris claro para el botón */
+    --color-button-gray-light: #AAAAAA; 
+
+    /* 🟢 OPTIMIZACIÓN 5: Volvemos al control estricto de columnas */
+    --grid-columns: 8; 
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    /* 🟢 Uso de variable */
+    background-color: var(--color-bg-base); 
+    font-family: Arial, sans-serif;
+    position: relative; 
+    overflow: hidden; 
+}
+
+/* CONTENEDOR DE FONDOS (CAPAS) */
+#background-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1; 
+    pointer-events: none; 
+}
+
+/* ESTILOS PARA CADA CAPA DE FONDO */
+.background-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0; 
+    
+    /* Estilos de imagen */
+    background-size: cover; 
+    background-position: center;
+    background-attachment: fixed; 
+    
+    /* TRANSICIÓN DE OPACIDAD PARA EL FADE IN/OUT */
+    transition: opacity 0.5s ease; 
+}
+
+.rueda {
+    /* --rueda-tamano y left se definen en JavaScript */
+    width: var(--rueda-tamano);
+    height: var(--rueda-tamano);
+    
+    border-radius: 50%;
+    border: none; 
+    
+    position: fixed; 
+    top: 50%;
+    
+    /* La posición 'left' se sobreescribe en JS. */
+    transform: translateY(-50%); 
+    /* Eliminamos la transición para la animación JS */
+    transition: none; 
+    
+    /* 🚀 OPTIMIZACIÓN: Indica que 'transform' cambiará (rotación) */
+    will-change: transform; 
+}
+
+.opcion {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    padding: 0; 
+    background-color: transparent; 
+    box-shadow: none; 
+    border-radius: 0;
+    
+    cursor: pointer;
+    z-index: 10;
+    /* Eliminamos la transición de rotación del CSS */
+    transition: none; 
+    
+    transform: translate(-50%, -50%); 
+}
+
+/* 🟢 OPTIMIZACIÓN 1: Aplica el z-index al contenedor */
+.opcion.seleccionada {
+    z-index: 11; 
+}
+
+/* Estilos de la IMAGEN */
+.opcion img {
+    display: block;
+    width: 100%; 
+    height: 100%;
+    object-fit: contain; 
+    
+    transition: transform 0.3s ease-out, filter 0.3s ease-out; 
+    will-change: transform, filter; 
+    /* CORRECCIÓN: Fuerza la aceleración de hardware para la nitidez del SVG */
+    transform: translateZ(0); 
+}
+
+/* Elemento Seleccionado: Desplazado 30px a la derecha */
+.opcion.seleccionada img {
+    /* Se elimina la redundancia de translateZ(0) y el z-index */
+    transform: scale(1.3) translateX(30px); 
+    filter: drop-shadow(0px 4px 15px rgba(0, 0, 0, 0.6)); 
+}
+
+/* ----------------------------------------------------- */
+/* --- Estilos de Overlays (Modal Principal y Detalles) --*/
+/* 🟢 OPTIMIZACIÓN 8: Estilos Base Comunes para Overlays */
+.modal-overlay, .game-details-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none; 
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+/* 🟢 OPTIMIZACIÓN 8: Estilos de Apertura Comunes para Overlays */
+.modal-overlay.open, .game-details-overlay.open {
+    display: flex; 
+    opacity: 1;
+}
+
+/* Estilos ÚNICOS del Overlay PRINCIPAL */
+.modal-overlay {
+    background-color: rgba(0, 0, 0, 0.9); 
+    z-index: 1000; /* Z-index base */
+}
+
+.modal-content {
+    /* 🟢 Uso de variables */
+    background-color: var(--color-bg-modal);
+    color: var(--color-text-light);
+    width: 100%; 
+    height: 100%; 
+    border-radius: 0; 
+    box-shadow: none; 
+    transform: none; 
+    transition: none;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-overlay.open .modal-content {
+    transform: none;
+}
+
+.modal-header {
+    padding: 20px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center; 
+    min-height: 96px; 
+    position: relative;
+    z-index: 1; 
+    overflow: hidden; 
+    
+    /* 🟢 OPTIMIZACIÓN 7: Evita que el encabezado se encoja */
+    flex-shrink: 0; 
+    
+    /* 🟢 Uso de variables */
+    border-bottom: 3px solid var(--color-accent); 
+}
+
+.modal-header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* 🟢 Uso de variables */
+    background-color: var(--color-bg-darkest); /* Color de fallback */
+    background-image: var(--bg-url); 
+    background-size: cover;
+    background-position: center;
+    opacity: 0.7; 
+    filter: blur(5px) brightness(0.5); 
+    z-index: -1; 
+}
+
+#modal-image {
+    height: 80px; 
+    width: auto;
+    object-fit: contain;
+    z-index: 2; 
+}
+
+/* 🟢 OPTIMIZACIÓN 6: Base compartida para botones de cierre (agrupación) */
+.modal-close, .game-details-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    z-index: 2;
+    right: auto;
+}
+
+.modal-close {
+    /* Propiedades ÚNICAS */
+    /* 🟢 Uso de variables */
+    color: var(--color-text-light);
+    font-size: 30px; 
+    position: absolute; 
+    top: 50%; 
+    left: 20px; 
+    line-height: 1;
+    
+    display: flex;
+    align-items: center;
+    
+    transform: translateY(-50%); 
+}
+
+.modal-close img {
+    width: 60px; 
+    height: 60px;
+    transition: filter 0.2s ease-out; 
+}
+
+.modal-close:hover img {
+    /* 🟢 Uso de variables */
+    filter: drop-shadow(0 0 10px var(--color-accent)) drop-shadow(0 0 20px var(--color-accent-hover)); 
+    cursor: pointer;
+}
+
+.modal-body {
+    /* 🚨 El padding es clave para el centrado */
+    padding: 20px; 
+    flex-grow: 1;
+    overflow-y: auto;
+    /* 🟢 Uso de variables */
+    background-color: var(--color-bg-modal); 
+    /* Se elimina scroll-behavior: smooth para controlarlo totalmente por JS */
+    
+    /* 🚀 OPTIMIZACIÓN: Indica que la posición de scroll cambiará */
+    will-change: scroll-position;
+}
+
+/* ESTILOS PARA EL GRID DE CONTENIDO (ADAPTACIÓN DE RESOLUCIÓN) */
+.content-grid-container {
+    /* Padding adaptativo (vertical 2vh, horizontal 1vw) */
+    padding: 2vh 1vw; 
+    
+    /* Permitir expansión en monitores grandes */
+    max-width: 1920px; 
+    margin: 0 auto; 
+    
+}
+
+.content-grid {
+    display: grid;
+    /* 🟢 OPTIMIZACIÓN 5: Usamos la variable para el número de columnas */
+    grid-template-columns: repeat(var(--grid-columns), 1fr);
+    
+    /* Gap adaptativo */
+    gap: 1.5vw; 
+    
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+/* 🟢 OPTIMIZACIÓN 5: Nuevo estilo para evitar que un solo elemento sea gigante */
+.content-grid:has(> .grid-item:only-child) {
+    /* Alinea el contenido al centro si solo hay un elemento */
+    justify-content: center;
+}
+
+.content-grid:has(> .grid-item:only-child) > .grid-item {
+    /* Limita el ancho del elemento único para que no abarque toda la pantalla */
+    max-width: 300px; 
+}
+
+
+/* --- Media Queries para Adaptabilidad del Grid --- */
+
+/* Pantalla 1601px a 1920px (max-width: 1920px) - 7 columnas */
+@media (max-width: 1920px) {
+     .content-grid {
+        /* 🟢 OPTIMIZACIÓN 5: Sobreescribir la variable de columnas */
+        --grid-columns: 7;
+    }
+}
+
+/* Pantalla 1441px a 1600px (max-width: 1600px) - 6 columnas */
+@media (max-width: 1600px) {
+    .content-grid {
+        --grid-columns: 6;
+    }
+}
+
+/* Pantalla 1281px a 1440px (max-width: 1440px) - 5 columnas */
+@media (max-width: 1440px) {
+     .content-grid {
+        --grid-columns: 5;
+    }
+}
+
+/* Pantalla 901px a 1280px (max-width: 1280px) - 4 columnas */
+@media (max-width: 1280px) {
+     .content-grid {
+        --grid-columns: 4;
+    }
+}
+
+/* Tablet 601px a 900px (max-width: 900px) - 3 columnas */
+@media (max-width: 900px) {
+    .content-grid {
+        --grid-columns: 3;
+        gap: 1.2vw;
+    }
+}
+
+/* Móvil/Pantalla Pequeña (< 600px) - 2 columnas */
+@media (max-width: 600px) {
+    .content-grid {
+        --grid-columns: 2;
+        gap: 10px; /* Reducir el gap en móvil */
+    }
+    .content-grid-container {
+        padding: 10px; /* Padding fijo de 10px en móvil */
+    }
+}
+/* ----------------------------------------------- */
+
+.grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    /* 🟢 Uso de variables */
+    background-color: var(--color-bg-darkest); 
+    border-radius: 8px;
+    overflow: hidden; 
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    /* 🚀 will-change aquí no es necesario ya que se usa en el hover/select */
+    transition: transform 0.2s ease, box-shadow 0.2s ease; 
+    cursor: pointer;
+    
+    /* 💥 MODIFICACIÓN CLAVE: Mantiene la altura del item según su contenido */
+    align-self: start; 
+}
+
+/* Reutilización de estilos para el estado seleccionado por teclado */
+.grid-item:hover,
+.grid-item.selected { /* Clase para selección por teclado */
+    transform: translateY(-5px); 
+    /* 🟢 Mantenemos el RGBA con el color del acento */
+    box-shadow: 0 0 15px rgba(255, 165, 0, 0.6); 
+    will-change: transform, box-shadow; /* 🚀 OPTIMIZACIÓN: Añadir will-change en la selección */
+}
+
+/* Adaptabilidad de la imagen */
+.grid-item-image {
+    width: 100%;
+    height: auto; 
+    object-fit: contain; 
+    display: block;
+    /* Valor de fallback común y transición para suavizar el cambio de aspecto */
+    aspect-ratio: 16 / 9; 
+    transition: aspect-ratio 0.3s ease; 
+}
+
+/* Estilo para el estado de carga (loading.svg) */
+.grid-item-image.is-loading {
+    object-fit: contain; 
+    padding: 10%; 
+    aspect-ratio: 16 / 9; 
+}
+
+
+.grid-item-title {
+    /* 🟢 Uso de variables */
+    color: var(--color-text-light);
+    font-size: 0.9em;
+    font-weight: bold;
+    padding: 10px 5px;
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    width: 100%;
+}
+
+#modal-title {
+    display: none; 
+}
+
+/* --- Estilos para el Menú de Detalles del Juego (Overlay SECUNDARIO) --- */
+.game-details-overlay {
+    background-color: rgba(0, 0, 0, 0.7); /* Fondo oscuro y TRASLÚCIDO */
+    z-index: 2000; /* Más alto que el modal principal */
+}
+
+.game-details-content {
+    /* 🟢 Uso de variables */
+    background-color: rgba(34, 34, 34, 0.95); /* El color #222 se podría sustituir */
+    color: var(--color-text-light);
+    width: 90%;
+    max-width: 400px; /* Tamaño más pequeño */
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    position: relative;
+    transform: scale(0.95);
+    transition: transform 0.3s ease-in-out;
+}
+
+.game-details-overlay.open .game-details-content {
+    transform: scale(1);
+}
+
+.game-details-close {
+    /* 🟢 Propiedades ÚNICAS */
+    position: absolute; 
+    top: 10px; 
+    left: 10px; /* Posicionado a la izquierda */
+}
+
+.game-details-close img {
+    width: 30px; 
+    height: 30px;
+    /* Mantener color original */
+    transition: filter 0.2s ease;
+}
+
+.game-details-close:hover img {
+    /* 🟢 Uso de variables */
+    filter: drop-shadow(0 0 5px var(--color-accent));
+}
+
+.game-details-header {
+    width: 100%;
+    max-width: 250px;
+    /* Eliminamos el aspect-ratio fijo de aquí también para adaptabilidad */
+    aspect-ratio: auto; 
+    overflow: hidden;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    box-shadow: 0 4-box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+#game-details-image {
+    width: 100%;
+    height: auto;
+    object-fit: contain; /* Usar contain para que se vea completa */
+    display: block;
+}
+
+.game-details-title {
+    font-size: 1.2em;
+    font-weight: bold;
+    /* 🟢 Uso de variables */
+    color: var(--color-text-white);
+    text-align: center;
+    margin: 0 0 20px 0;
+}
+
+.game-details-body {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.download-button {
+    /* 🟢 OPTIMIZACIÓN 4: Fondo gris claro */
+    background-color: var(--color-button-gray-light);
+    /* 🟢 OPTIMIZACIÓN 4: Texto oscuro */
+    color: var(--color-text-dark);
+    
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+    width: 100%;
+}
+
+.download-button:hover {
+    /* 🟢 Uso de variables */
+    background-color: var(--color-accent-hover);
+    color: var(--color-text-light); /* El texto vuelve a ser claro en el hover */
+    transform: scale(1.02);
+}
+
+/* Estilo para botón deshabilitado */
+.download-button:disabled {
+    /* 🟢 OPTIMIZACIÓN 4: Fondo gris claro y opacidad para indicar inactividad */
+    background-color: var(--color-button-gray-light);
+    color: var(--color-text-dark);
+    cursor: not-allowed;
+    transform: scale(1);
+    opacity: 0.6; /* Indicador visual de deshabilitado */
+}
