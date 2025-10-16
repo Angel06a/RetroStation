@@ -65,10 +65,11 @@ body {
     background-position: center;
     background-attachment: fixed; 
     
-    /* TRANSICIÓN DE OPACIDAD PARA EL FADE IN/OUT */
+    /* TRANSICIÓN DE OPACIDAD PARA EL FADE IN/OUT (Compatible con GPU) */
     transition: opacity 0.5s ease; 
 }
 
+/* CLASE BASE DE LA RUEDA (PC) */
 .rueda {
     /* --rueda-tamano y left se definen en JavaScript */
     width: var(--rueda-tamano);
@@ -85,10 +86,11 @@ body {
     /* Eliminamos la transición para la animación JS */
     transition: none; 
     
-    /* 🚀 OPTIMIZACIÓN: Indica que 'transform' cambiará (rotación) */
+    /* 🚀 OPTIMIZACIÓN GPU: Indica que 'transform' cambiará (rotación) */
     will-change: transform; 
 }
 
+/* CLASE BASE DE LAS OPCIONES (PC) */
 .opcion {
     position: absolute;
     display: flex;
@@ -121,16 +123,16 @@ body {
     object-fit: contain; 
     
     transition: transform 0.3s ease-out, filter 0.3s ease-out; 
-    /* 🚀 OPTIMIZACIÓN: Mantener will-change para una animación más fluida */
+    /* 🚀 OPTIMIZACIÓN GPU: Mantener will-change para una animación más fluida */
     will-change: transform, filter; 
-    /* CORRECCIÓN: Fuerza la aceleración de hardware para la nitidez del SVG */
+    /* 🚀 OPTIMIZACIÓN GPU: Fuerza la aceleración de hardware (capa de composición) */
     transform: translateZ(0); 
 }
 
 /* Elemento Seleccionado: Desplazado 30px a la derecha */
 .opcion.seleccionada img {
-    /* Se elimina la redundancia de translateZ(0) y el z-index */
-    transform: scale(1.3) translateX(30px); 
+    /* 🚀 MODIFICACIÓN: Se agrega translateZ(0) al final para asegurar la capa de composición */
+    transform: scale(1.3) translateX(30px) translateZ(0); 
     filter: drop-shadow(0px 4px 15px rgba(0, 0, 0, 0.6)); 
 }
 
@@ -147,7 +149,8 @@ body {
     justify-content: center;
     align-items: center;
     opacity: 0;
-    transition: opacity 0.3s ease-in-out;
+    /* Compatible con GPU */
+    transition: opacity 0.3s ease-in-out; 
 }
 
 /* 🟢 OPTIMIZACIÓN 8: Estilos de Apertura Comunes para Overlays */
@@ -212,6 +215,7 @@ body {
     background-size: cover;
     background-position: center;
     opacity: 0.7; 
+    /* El filtro se procesa en capa, si bien consume GPU, es la forma de lograr el efecto */
     filter: blur(5px) brightness(0.5); 
     z-index: -1; 
 }
@@ -370,19 +374,22 @@ body {
     border-radius: 8px;
     overflow: hidden; 
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-    /* 🚀 OPTIMIZACIÓN: Pre-promocionar el elemento para una transición suave en hover/select */
+    /* 🚀 OPTIMIZACIÓN GPU: Pre-promocionar el elemento para una transición suave en hover/select */
     will-change: transform, box-shadow; 
     transition: transform 0.2s ease, box-shadow 0.2s ease; 
     cursor: pointer;
     
     /* 💥 MODIFICACIÓN CLAVE: Mantiene la altura del item según su contenido */
     align-self: start; 
+    /* 🚀 AGREGADO GPU: Fuerza la aceleración de hardware para la base */
+    transform: translateZ(0); 
 }
 
 /* Reutilización de estilos para el estado seleccionado por teclado */
 .grid-item:hover,
 .grid-item.selected { /* Clase para selección por teclado */
-    transform: translateY(-5px); 
+    /* 🚀 MODIFICACIÓN GPU: Asegura el uso de la GPU para la animación */
+    transform: translateY(-5px) translateZ(0); 
     /* 🟢 Mantenemos el RGBA con el color del acento */
     box-shadow: 0 0 15px rgba(255, 165, 0, 0.6); 
     /* ❌ OPTIMIZACIÓN: Eliminamos will-change de aquí ya que se movió al selector base */
@@ -442,11 +449,14 @@ body {
     align-items: center;
     padding: 20px;
     position: relative;
-    transform: scale(0.95);
-    transition: transform 0.3s ease-in-out;
+    /* Compatible con GPU */
+    transform: scale(0.95); 
+    /* Compatible con GPU */
+    transition: transform 0.3s ease-in-out; 
 }
 
 .game-details-overlay.open .game-details-content {
+    /* Compatible con GPU */
     transform: scale(1);
 }
 
@@ -515,7 +525,8 @@ body {
     font-size: 1em;
     font-weight: bold;
     cursor: pointer;
-    transition: background-color 0.2s, transform 0.1s;
+    /* Compatible con GPU (transform) */
+    transition: background-color 0.2s, transform 0.1s; 
     width: 100%;
 }
 
@@ -523,6 +534,7 @@ body {
     /* 🟢 Uso de variables */
     background-color: var(--color-accent-hover);
     color: var(--color-text-light); /* El texto vuelve a ser claro en el hover */
+    /* Compatible con GPU */
     transform: scale(1.02);
 }
 
@@ -532,6 +544,111 @@ body {
     background-color: var(--color-button-gray-light);
     color: var(--color-text-dark);
     cursor: not-allowed;
+    /* Compatible con GPU */
     transform: scale(1);
+    /* Compatible con GPU */
     opacity: 0.6; /* Indicador visual de deshabilitado */
+}
+
+
+/* ========================================================================= */
+/* ESTILOS PARA CINTA VERTICAL (MÓVILES) - Rueda Desactivada */
+/* ========================================================================= */
+@media (max-width: 768px) {
+
+    body { 
+        /* Permitir el scroll en el body si la cinta excede el alto */
+        overflow-y: auto !important;
+        /* Los sistemas inician desde arriba en lugar de centrarse */
+        align-items: flex-start !important; 
+        justify-content: center !important;
+    }
+    
+    /* 1. Contenedor principal (#rueda) */
+    #rueda {
+        /* Neutralizar la forma de rueda y la posición fija */
+        position: relative !important; 
+        width: 100% !important; 
+        height: auto !important;
+        left: 0 !important;
+        top: 0 !important;
+        /* Quitar la rotación y el desplazamiento */
+        transform: none !important; 
+        
+        /* Eliminar estilos de círculo */
+        border-radius: 0 !important;
+        
+        /* Usar Flexbox para la lista vertical (la "cinta") */
+        display: flex !important; 
+        flex-direction: column !important;
+        align-items: center !important; 
+        
+        /* Espacio mínimo para que se vean los bordes */
+        padding: 10px 0; 
+        
+        /* Permitir el scroll en el contenedor interno */
+        overflow-y: scroll !important;
+        overflow-x: hidden !important;
+        max-height: 100vh;
+    }
+
+    /* 2. Opciones individuales dentro de la cinta (.opcion) */
+    .opcion {
+        /* Sobrescribir las posiciones circulares forzadas por JS */
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        transform: none !important; 
+        
+        /* *** Invisibilidad y Tamaño Fijo para el Icono *** */
+        width: 100px !important; 
+        height: 100px !important; 
+        margin-bottom: 5px; 
+        
+        /* Fondo completamente invisible */
+        background-color: transparent !important; 
+        border-radius: 0 !important;
+        box-shadow: none !important; 
+        padding: 0;
+        
+        /* Asegurar que el contenido (el SVG) esté centrado */
+        display: flex !important;
+        justify-content: center;
+        align-items: center;
+        
+        flex-direction: column; 
+    }
+    
+    /* 3. Estilo para la imagen del sistema (SVG) */
+    .opcion img {
+        width: 80px !important; 
+        height: 80px !important;
+        min-width: 80px; 
+        margin: 0 !important; 
+        object-fit: contain;
+        transform: none !important; 
+        filter: none !important; 
+        transition: transform 0.2s ease-out, filter 0.2s ease-out;
+    }
+
+    /* 4. Estilo de selección (sólo debe afectar el icono) */
+    .opcion.seleccionada {
+        background-color: transparent !important; 
+        transform: none !important;
+        box-shadow: none !important;
+    }
+    
+    /* Realzar el icono seleccionado */
+    .opcion.seleccionada img {
+         /* 🚀 MODIFICACIÓN GPU: Asegura el uso de la GPU para la animación */
+         transform: scale(1.2) translateZ(0) !important; 
+         /* Usar un filtro de sombra con el color de acento */
+         filter: drop-shadow(0 0 10px var(--color-accent)) !important;
+    }
+    
+    /* 5. Remover el nombre del sistema */
+    .opcion::after {
+        content: none !important; 
+        display: none !important;
+    }
 }
