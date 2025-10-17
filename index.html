@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RetroStation</title>
     
+    <link rel="preload" href="Js/data.js" as="script">
+    <link rel="preload" href="Js/utils.js" as="script">
+    
     <link rel="stylesheet" href="main-menu.css"> 
     
     <link rel="preload" href="grid-menu.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="grid-menu.css"></noscript>
-    
     <link rel="preload" href="game-details.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="game-details.css"></noscript>
     
+    <link rel="preload" href="Icons/back.svg" as="image">
     <link rel="icon" href="Icons/favicon.png" type="image/png">
 </head>
 <body>
@@ -34,7 +35,7 @@
             <div class="modal-body">
                 <div id="content-grid-container" class="content-grid-container">
                     </div>
-                <h2 id="modal-title"></h2>
+                <h2 id="modal-title"></h2> 
             </div>
         </div>
     </div>
