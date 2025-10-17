@@ -1,0 +1,242 @@
+/* grid-menu.css - CSS Asíncrono para el Grid de Juegos OPTIMIZADO V2 */
+
+.modal-content {
+    background-color: var(--color-bg-modal); 
+    color: var(--color-text-light);
+    width: 100%; 
+    height: 100%; 
+    transform: none; 
+    transition: none;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center; 
+    min-height: 96px; 
+    position: relative;
+    z-index: 1; 
+    overflow: hidden; 
+    flex-shrink: 0; 
+    border-bottom: 3px solid var(--color-accent); 
+}
+
+.modal-header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--color-bg-darkest); 
+    background-image: var(--bg-url); 
+    background-size: cover;
+    background-position: center;
+    opacity: 0.7; 
+    filter: blur(5px) brightness(0.5); 
+    z-index: -1; 
+}
+
+#modal-image {
+    height: 80px; 
+    width: auto;
+    object-fit: contain;
+    z-index: 2; 
+}
+
+/* Base compartida para botones de cierre (agrupación) */
+.modal-close, .game-details-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    z-index: 2;
+}
+
+.modal-close {
+    /* Propiedades ÚNICAS */
+    color: var(--color-text-light);
+    font-size: 30px; 
+    position: absolute; 
+    top: 50%; 
+    left: 20px; 
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    transform: translateY(-50%); 
+}
+
+.modal-close img {
+    width: 60px; 
+    height: 60px;
+    transition: filter 0.2s ease-out; 
+    /* 🟢 OPTIMIZACIÓN: Añadir will-change para el filtro */
+    will-change: filter;
+}
+
+.modal-close:hover img {
+    filter: drop-shadow(0 0 10px var(--color-accent)) drop-shadow(0 0 20px var(--color-accent-hover)); 
+    cursor: pointer;
+}
+
+.modal-body {
+    padding: 20px; 
+    flex-grow: 1;
+    overflow-y: auto;
+    background-color: var(--color-bg-modal); 
+}
+
+/* ESTILOS PARA EL GRID DE CONTENIDO (BASE) */
+.content-grid-container {
+    padding: 2vh 1vw; 
+    max-width: 1920px; 
+    margin: 0 auto; 
+}
+
+.content-grid {
+    display: grid;
+    /* Usa la variable --grid-columns definida en :root y media queries */
+    grid-template-columns: repeat(var(--grid-columns), 1fr); 
+    gap: 1.5vw; 
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    /* 🟢 OPTIMIZACIÓN: Añadir rol semántico a la lista si no se hace en HTML */
+    /* role: "list"; (Esto es un atributo HTML, se mantiene el CSS limpio) */
+}
+
+/* OPTIMIZACIÓN 5: Nuevo estilo para evitar que un solo elemento sea gigante */
+.content-grid:has(> .grid-item:only-child) {
+    justify-content: center; 
+}
+
+.content-grid:has(> .grid-item:only-child) > .grid-item {
+    max-width: 300px; 
+}
+
+
+/* --- Media Queries para Adaptabilidad del Grid (Consolidación) --- */
+
+/* Por defecto, --grid-columns es 8 (desde :root en main-menu.css) */
+
+/* Pantalla 1601px a 1920px (max-width: 1920px) - 7 columnas */
+@media (max-width: 1920px) {
+     .content-grid { --grid-columns: 7; }
+}
+
+/* Pantalla 1441px a 1600px (max-width: 1600px) - 6 columnas */
+@media (max-width: 1600px) {
+    .content-grid { --grid-columns: 6; }
+}
+
+/* Pantalla 1281px a 1440px (max-width: 1440px) - 5 columnas */
+@media (max-width: 1440px) {
+     .content-grid { --grid-columns: 5; }
+}
+
+/* Pantalla 901px a 1280px (max-width: 1280px) - 4 columnas */
+@media (max-width: 1280px) {
+     .content-grid { --grid-columns: 4; }
+}
+
+/* Tablet 601px a 900px (max-width: 900px) - 3 columnas */
+@media (max-width: 900px) {
+    .content-grid {
+        --grid-columns: 3;
+        gap: 1.2vw;
+    }
+}
+
+/* Móvil/Pantalla Pequeña (< 600px) - 2 columnas */
+@media (max-width: 600px) {
+    .content-grid {
+        --grid-columns: 2;
+        gap: var(--mobile-padding); 
+    }
+    .content-grid-container {
+        padding: var(--mobile-padding); 
+    }
+}
+
+.grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    background-color: var(--color-bg-darkest); 
+    border-radius: 8px;
+    overflow: hidden; 
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    /* 🟢 OPTIMIZACIÓN: will-change ya está, lo mantenemos como clave de rendimiento */
+    will-change: transform, box-shadow; 
+    transition: transform 0.2s ease, box-shadow 0.2s ease; 
+    cursor: pointer;
+    align-self: start; 
+    /* 🟢 OPTIMIZACIÓN: Usar transform 3D como valor inicial para forzar la aceleración GPU */
+    transform: translate3d(0, 0, 0); 
+}
+
+.grid-item:hover,
+.grid-item.selected { 
+    transform: translateY(-5px) translate3d(0, 0, 0); 
+    box-shadow: 0 0 15px var(--color-accent); 
+}
+
+/* Adaptabilidad de la imagen */
+.grid-item-image {
+    width: 100%;
+    height: auto; 
+    object-fit: contain; 
+    display: block;
+    /* 🟢 OPTIMIZACIÓN: Uso de aspect-ratio es CLAVE, ya está implementado. */
+    aspect-ratio: 16 / 9; 
+    transition: aspect-ratio 0.3s ease; 
+}
+
+/* Estilo para el estado de carga (loading.svg) */
+.grid-item-image.is-loading {
+    object-fit: contain; 
+    padding: 10%; 
+    aspect-ratio: 16 / 9; 
+}
+
+
+.grid-item-title {
+    color: var(--color-text-light); 
+    font-size: 0.9em;
+    font-weight: bold;
+    padding: 10px 5px;
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    width: 100%;
+}
+
+#modal-title {
+    display: none; 
+}
+
+/* ----------------------------------------------------- */
+/* *** MODIFICACIÓN: Ajustes de tamaño en Encabezado Móvil (max-width: 768px) *** */
+/* ----------------------------------------------------- */
+@media (max-width: 768px) {
+    /* Icono del Sistema (Centrado) */
+    #modal-image {
+        height: 60px; 
+        max-width: calc(100% - 100px); 
+        width: auto; 
+    }
+    
+    /* Botón de Cierre (Ícono Atrás) */
+    .modal-close {
+        left: 10px; 
+    }
+    
+    .modal-close img {
+        width: 40px; 
+        height: 40px;
+    }
+}
