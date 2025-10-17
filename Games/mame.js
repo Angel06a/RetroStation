@@ -1,0 +1,27 @@
+// Usamos una variable genérica. La lógica en index.html se encargará de leerla
+// y eliminarla inmediatamente después de su uso para prevenir bugs.
+window.currentGameListString = `
+-Black Tiger "https://www.mediafire.com/file/qyrqzco4t6apv7f/blktiger.zip"
+-Donkey Kong "https://www.mediafire.com/file/kjbkvbw3enxsabs/dkongo.zip"
+-Killer Instinct "https://www.mediafire.com/file/h34bkeveh27k9hv/kinst.rar"
+-Killer Instinct 2 "https://www.mediafire.com/file/hi641case45neag/kinst2.rar"
+-Mario Bros. "https://www.mediafire.com/file/3uqt12aqoh1fr35/mario.zip"
+-Metal Slug - Super Vehicle-001 "https://www.mediafire.com/file/96uc56ohr46z6t7/mslug.zip"
+-Metal Slug 2 - Super Vehicle-001 II "https://www.mediafire.com/file/g9bcu8koviei6xg/mslug2t.zip"
+-Metal Slug 3 "https://www.mediafire.com/file/iala7noxbcoqr9y/mslug3h.zip"
+-Metal Slug 4 "https://www.mediafire.com/file/nzblaa9bvfbgdjg/mslug4.zip"
+-Metal Slug 5 "https://www.mediafire.com/file/rzuqv9zr2d5jutj/mslug5.zip"
+-Metal Slug X - Super Vehicle-001 "https://www.mediafire.com/file/60wzv81wt1ekr0e/mslugx.zip"
+-Pacman "https://www.mediafire.com/file/2x9cu3f9329pz8n/pacman.zip"
+-Pang "https://www.mediafire.com/file/e643q7fuotuofrq/pang.zip"
+-Savage Reign "https://www.mediafire.com/file/5v0vx14jmjqu6n8/savagere.zip"
+-Street Fighter II' Champion Edition "https://www.mediafire.com/file/wd720w4bzpdgnfe/sf2ce.zip"
+-Soul Edge "https://www.mediafire.com/file/dlu8rnb1eg40dci/souledge.zip"
+-VS. Super Mario Bros. "https://www.mediafire.com/file/uzjkxlyisya5dbg/suprmrio.zip"
+-SNK vs. Capcom "https://www.mediafire.com/file/mdz56gmijgmrb3m/svc.zip"
+-Tekken "https://www.mediafire.com/file/n2kw1nj3d92osum/tekken.zip"
+-Tekken 2 "https://www.mediafire.com/file/toxiezs5dhi0pye/tekken2.zip"
+-Tekken 3 "https://www.mediafire.com/file/9fln8cfbtqc53jn/tekken3.zip"
+-Tekken Tag Tournament "https://www.mediafire.com/file/oglxkw4qhbkrnb9/tektagt.zip"
+-Virtua Fighter 2 "https://www.mediafire.com/file/epx6942ll6t5q3m/vf2.zip"
+`;
