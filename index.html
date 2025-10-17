@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RetroStation</title>
     
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="main-menu.css"> 
+    
+    <link rel="preload" href="grid-menu.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="grid-menu.css"></noscript>
+    
+    <link rel="preload" href="game-details.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="game-details.css"></noscript>
     
     <link rel="icon" href="Icons/favicon.png" type="image/png">
 </head>
@@ -13,30 +19,30 @@
     
     <div id="background-container"></div>
     
-    <div id="rueda" class="rueda">
-    </div>
+    <main id="rueda" class="rueda" role="navigation">
+    </main>
     
-    <div id="modal-overlay" class="modal-overlay">
+    <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div id="modal-content" class="modal-content">
-            <div id="modal-header" class="modal-header">
-                <img id="modal-image" src="" alt="Imagen de sistema">
-                <button id="modal-close" class="modal-close">
+            <header id="modal-header" class="modal-header">
+                <button id="modal-close" class="modal-close" aria-label="Cerrar menú y volver al principal">
                     <img src="Icons/back.svg" alt="Atrás" title="Cerrar menú">
                 </button>
-            </div>
+                <img id="modal-image" src="" alt="Imagen de sistema">
+            </header>
             
             <div class="modal-body">
                 <div id="content-grid-container" class="content-grid-container">
                     </div>
-                <h2 id="modal-title" style="display: none;"></h2>
+                <h2 id="modal-title"></h2>
             </div>
         </div>
     </div>
 
-    <div id="game-details-overlay" class="game-details-overlay">
+    <div id="game-details-overlay" class="game-details-overlay" role="dialog" aria-modal="true" aria-labelledby="game-details-title">
         <div id="game-details-content" class="game-details-content">
             
-            <button id="game-details-close" class="game-details-close">
+            <button id="game-details-close" class="game-details-close" aria-label="Cerrar detalles del juego">
                 <img src="Icons/back.svg" alt="Atrás" title="Cerrar detalles">
             </button>
 
