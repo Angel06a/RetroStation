@@ -1,0 +1,216 @@
+/* main-menu.css - CSS CRÍTICO OPTIMIZADO */
+
+/* 🟢 OPTIMIZACIÓN 6: Box-Sizing Global para un Layout Robusto */
+html {
+    box-sizing: border-box;
+}
+*, *::before, *::after {
+    box-sizing: inherit;
+}
+
+/* 🟢 OPTIMIZACIÓN 3: Variables CSS para Mantenibilidad y Temas */
+:root {
+    /* Colores */
+    --color-bg-base: #333;
+    --color-bg-modal: #222;
+    --color-bg-darkest: #1a1a1a;
+    --color-text-light: #f1f1f1;
+    --color-text-white: #fff;
+    --color-text-dark: #1a1a1a;
+    --color-accent: #FFA500;
+    --color-accent-hover: #FF8C00;
+    --color-button-gray-light: #AAAAAA; 
+    
+    /* Layout */
+    --grid-columns: 8;
+    
+    /* Espaciado Móvil */
+    --mobile-padding: 10px; 
+}
+
+/* --- ESTILOS CRÍTICOS DEL BODY/LAYOUT BASE --- */
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    background-color: var(--color-bg-base); 
+    font-family: Arial, sans-serif;
+    position: relative; 
+    overflow: hidden; /* IMPORTANTE: Oculta scrollbars iniciales */
+}
+
+/* CONTENEDOR DE FONDOS (CAPAS) */
+#background-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1; 
+    pointer-events: none; 
+}
+
+/* ESTILOS PARA CADA CAPA DE FONDO */
+.background-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0; 
+    background-size: cover; 
+    background-position: center;
+    background-attachment: fixed; 
+    transition: opacity 0.5s ease; 
+}
+
+/* --- Estilos de Rueda y Opciones (PC) --- */
+.rueda {
+    width: var(--rueda-tamano);
+    height: var(--rueda-tamano);
+    border-radius: 50%;
+    position: fixed; 
+    top: 50%;
+    transform: translateY(-50%); 
+    transition: none; 
+    will-change: transform; 
+}
+
+.opcion {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0; 
+    background-color: transparent; 
+    border-radius: 0;
+    cursor: pointer;
+    z-index: 10;
+    transition: none; 
+    transform: translate(-50%, -50%); 
+}
+
+.opcion.seleccionada {
+    z-index: 11; 
+}
+
+.opcion img {
+    display: block;
+    width: 100%; 
+    height: 100%;
+    object-fit: contain; 
+    transition: transform 0.3s ease-out, filter 0.3s ease-out; 
+    will-change: transform, filter; 
+    transform: translate3d(0, 0, 0); 
+}
+
+.opcion.seleccionada img {
+    transform: scale(1.3) translateX(30px); 
+    filter: drop-shadow(0px 4px 15px rgba(0, 0, 0, 0.6)); 
+}
+
+/* --- Estilos de Overlays BASE --- */
+.modal-overlay, .game-details-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    visibility: hidden;
+    justify-content: center;
+    align-items: center;
+    transition: opacity 0.3s ease-in-out, visibility 0.3s; 
+}
+
+.modal-overlay.open, .game-details-overlay.open {
+    display: flex; 
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Estilos ÚNICOS del Overlay PRINCIPAL (sólo el fondo) */
+.modal-overlay {
+    background-color: rgba(0, 0, 0, 0.9); 
+    z-index: 1000; 
+}
+
+
+/* ========================================================================= */
+/* ESTILOS PARA CINTA VERTICAL (MÓVILES) - CRÍTICO PARA PANTALLAS PEQUEÑAS */
+/* ========================================================================= */
+@media (max-width: 768px) {
+    
+    body { 
+        overflow-y: auto; /* Permite scroll en móvil */
+        align-items: flex-start; 
+        justify-content: center;
+    }
+    
+    /* 1. Contenedor principal (#rueda) */
+    #rueda {
+        position: relative !important; 
+        width: 100% !important; 
+        height: auto !important;
+        left: 0 !important;
+        top: 0 !important;
+        transform: none !important; 
+        border-radius: 0;
+        display: flex;
+        flex-direction: column; 
+        align-items: center; 
+        padding: 10px 0; 
+        overflow-y: scroll; 
+        overflow-x: hidden; 
+        max-height: 100vh;
+    }
+
+    /* 2. Opciones individuales dentro de la cinta (.opcion) */
+    .opcion {
+        position: relative;
+        left: auto !important;
+        top: auto !important;
+        transform: none !important; 
+        width: 150px !important; 
+        height: 150px !important; 
+        margin-bottom: 5px; 
+        background-color: transparent !important; 
+        box-shadow: none !important; 
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column; 
+    }
+    
+    /* 3. Estilo para la imagen del sistema (SVG) y 4. Estilo de selección */
+    .opcion img {
+        width: 130px !important; 
+        height: 130px !important;
+        min-width: 130px; 
+        transform: none !important; 
+        filter: none !important; 
+        transition: transform 0.2s ease-out, filter 0.2s ease-out;
+    }
+
+    /* 4. Estilo de selección (sólo debe afectar el icono) */
+    .opcion.seleccionada {
+        background-color: transparent !important; 
+        transform: none !important;
+        box-shadow: none !important;
+        z-index: auto; 
+    }
+    
+    /* Realzar el icono seleccionado */
+    .opcion.seleccionada img {
+         transform: scale(1.2) !important; 
+         filter: drop-shadow(0 0 10px var(--color-accent)) !important;
+    }
+    
+    /* 5. Remover el nombre del sistema */
+    .opcion::after {
+        content: none !important; 
+        display: none !important;
+    }
+}
