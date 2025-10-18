@@ -1,3 +1,7 @@
+<div align="right">
+  <b>English</b> | <a href="README.es.md">Español</a> 
+</div>
+
 # 🕹️ RetroStation: Your Retro Gaming Hub
 
 Welcome to **RetroStation**, the ultimate portal to reliving the golden age of video games! 🎮
