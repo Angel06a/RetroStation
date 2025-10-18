@@ -2,6 +2,8 @@
 // mediafire-downloader.js: Lógica de Descarga Directa y Manejo de Carpetas
 // ADAPTACIÓN: Descarga todos los archivos de una carpeta secuencialmente, 
 // sin ventana de selección.
+// MODIFICACIÓN: Implementación de lógica móvil (detección y uso de openCleanPopup)
+// para FORZAR la apertura/descarga del LINK DIRECTO extraído por el proxy.
 // =========================================================================
 
 const linkCache = new Map();
@@ -9,7 +11,22 @@ const folderCache = new Map();
 
 // --- Utilidades Básicas ---
 
+// Detecta si el agente de usuario parece ser un dispositivo móvil
+function isMobile() {
+    return /Mobi/i.test(navigator.userAgent) || /Android/i.test(navigator.userAgent);
+}
+
 function triggerDownload(url) {
+    // Si estamos en un dispositivo móvil, usamos openCleanPopup.
+    // Esto asegura que la URL de descarga directa (obtenida por el proxy)
+    // se abra en una nueva pestaña, evitando el bloqueo de "a.click()" programático
+    // que es común en Chrome/Safari móvil para descargas que no son gestos directos.
+    if (isMobile()) {
+        openCleanPopup(url);
+        return;
+    }
+    
+    // Lógica original para PC (descarga automática sin nueva ventana)
     const a = document.createElement('a');
     a.href = url;
     a.download = '';
@@ -278,6 +295,8 @@ async function downloadMultipleFiles(files, buttonElement) {
     const total = files.length;
     let downloaded = 0;
     
+    const isMobileDevice = isMobile();
+    
     const updateButtonStatus = (message) => {
         buttonElement.textContent = message;
     };
@@ -287,14 +306,19 @@ async function downloadMultipleFiles(files, buttonElement) {
     // Descarga secuencial de archivos
     for (let file of files) {
         try {
-            updateButtonStatus(`📁 Descargando (${downloaded + 1}/${total}): ${file.name}`);
+            // Mensaje adaptado para móvil
+            const actionText = isMobileDevice ? 'Abriendo link directo' : 'Descargando';
+            updateButtonStatus(`📁 ${actionText} (${downloaded + 1}/${total}): ${file.name}`);
             
+            // EL PROXY SIEMPRE SE EJECUTA AQUI PARA OBTENER EL ENLACE DIRECTO
             const directUrl = await method2_externalServices(file.url);
             
             if (directUrl) {
-                triggerDownload(directUrl);
+                // Se usa triggerDownload, que internamente usa openCleanPopup si es móvil.
+                triggerDownload(directUrl); 
                 downloaded++;
-                // Espera 1 segundo entre descargas para evitar bloqueos del navegador
+                
+                // Espera 1 segundo entre descargas para evitar bloqueos
                 await new Promise(resolve => setTimeout(resolve, 1000)); 
             }
         } catch (error) {
@@ -319,6 +343,7 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
 
     buttonElement.disabled = true;
     const originalText = buttonElement.textContent;
+    const isMobileDevice = isMobile();
     
     const updateButtonStatus = (message) => {
         buttonElement.textContent = message;
@@ -334,7 +359,6 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
             const folderKey = extractFolderKey(mediafireUrl);
             if (!folderKey) {
                 updateButtonStatus('❌ URL de carpeta no válida, abriendo link...');
-                // Utiliza la función corregida
                 openCleanPopup(mediafireUrl); 
                 return;
             }
@@ -347,14 +371,12 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
                 
             } else {
                 updateButtonStatus('❌ Carpeta vacía o error, abriendo link...');
-                // Utiliza la función corregida
                 openCleanPopup(mediafireUrl);
             }
             
         } catch (error) {
             console.error('Error en el manejo de carpeta:', error);
             updateButtonStatus('❌ Error, abriendo link...');
-            // Utiliza la función corregida
             openCleanPopup(mediafireUrl);
         }
         
@@ -362,25 +384,26 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
         // Lógica de Archivo Individual
         try {
             if (linkCache.has(mediafireUrl)) {
-                updateButtonStatus('Descargando desde caché...');
+                updateButtonStatus(isMobileDevice ? 'Abriendo descarga directa desde caché...' : 'Descargando desde caché...');
                 triggerDownload(linkCache.get(mediafireUrl));
             } else {
                 updateButtonStatus('Obteniendo enlace directo...');
+                // LLAMADA AL PROXY
                 const directUrl = await method2_externalServices(mediafireUrl);
                 
                 if (directUrl) {
                     linkCache.set(mediafireUrl, directUrl);
+                    // triggerDownload usará openCleanPopup si es móvil, con la directUrl.
                     triggerDownload(directUrl);
-                    updateButtonStatus('Descargando...');
+                    updateButtonStatus(isMobileDevice ? '✅ Abriendo descarga en nueva pestaña' : 'Descargando...');
                 } else {
                     updateButtonStatus('Abriendo link (FALLBACK)');
-                    // Utiliza la función corregida
+                    // Se abre el link original de MediaFire solo si el proxy FALLÓ.
                     openCleanPopup(mediafireUrl);
                 }
             }
         } catch(e) {
             updateButtonStatus('Error. Abriendo link...');
-            // Utiliza la función corregida
             openCleanPopup(mediafireUrl);
         }
     }
