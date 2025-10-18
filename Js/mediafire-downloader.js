@@ -1,8 +1,8 @@
 // =========================================================================
 // mediafire-downloader.js: Lógica de Descarga Directa y Manejo de Carpetas
 // MODIFICADO: Funciones de manejo de carpetas hechas globales para la secuencia.
-// ELIMINADA: La función openCleanPopup() y su uso en el fallback para evitar
-// la simulación de clic que podría estar contribuyendo al aviso de Chrome.
+// SOLUCIÓN FINAL: Se elimina openCleanPopup() y su referencia. El fallback
+// ahora solo intenta la descarga directa con la URL de MediaFire original.
 // =========================================================================
 
 const linkCache = new Map(); 
@@ -18,7 +18,7 @@ function isMobile() {
 }
 
 /**
- * Inicia la descarga.
+ * Inicia la descarga o abre el enlace directo.
  */
 function triggerDownload(url) {
     // Intentamos iniciar la descarga en la pestaña actual (igual para PC y Móvil).
@@ -30,6 +30,10 @@ function triggerDownload(url) {
     a.click();
     document.body.removeChild(a);
 }
+
+// *** FUNCIÓN openCleanPopup ELIMINADA COMO SE SOLICITÓ ***
+// La eliminación total de esta función y su uso es la única forma de evitar
+// la apertura de una nueva pestaña/simulación de clic en el fallback.
 
 // --- Lógica de Extracción y Proxy Robusto ---
 
@@ -277,10 +281,10 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
             triggerDownload(directUrl);
             updateButtonStatus('Descargando...');
         } else {
-            // FALLBACK SIN POPUP: Intentamos la descarga directa con el URL de MediaFire
-            // Si el navegador lo permite, iniciará la descarga, sino, no pasará nada.
-            triggerDownload(mediafireUrl); 
+            // FALLBACK SIN ABRIR NUEVA PESTAÑA: Intentamos la descarga directa con el URL de MediaFire.
+            // Si MediaFire maneja bien el link, iniciará la descarga.
             updateButtonStatus('Descarga iniciada...'); 
+            triggerDownload(mediafireUrl);
         }
     } catch(e) {
         // En caso de error, intentamos la descarga directa con el URL original de MediaFire
