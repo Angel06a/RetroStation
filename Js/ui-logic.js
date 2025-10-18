@@ -1,15 +1,10 @@
 // =========================================================================
 // ui-logic.js: Rueda Dinámica, Animación y Navegación Principal
 //
-// OPTIMIZACIÓN AVANZADA: Desacoplamiento de dependencias globales
-// OPTIMIZACIÓN DE RENDERING: Creación de Opciones en Chunks con requestAnimationFrame (rAF)
-// 🚀 OPTIMIZACIÓN MÁXIMA: Lógica completamente delegada a CSS (Rotación y Horizontalidad)
-// -------------------------------------------------------------------------
-// NOTA DE CAMBIO: Se elimina el cálculo de corrección visual (applyVisualCorrection)
-// y se delega toda la rotación y contrarrotación a la propiedad 'transition' de CSS.
+// 🔧 OPTIMIZACIÓN DE CÓDIGO LIMPIO: Refactorización y centralización de la
+// lógica de rotación para reducir la duplicación.
 //
-// 🔧 CORRECCIÓN: Se ajusta updateViewState para manejar correctamente la transición
-// entre vista móvil y escritorio, eliminando 'transform: none' en escritorio.
+// 🚀 OPTIMIZACIÓN MÁXIMA: Lógica completamente delegada a CSS (Rotación y Horizontalidad)
 // =========================================================================
 
 // --- 0. Configuraciones Comunes (Mejorar Cohesión) ---
@@ -35,7 +30,7 @@ class RuedaDinamica {
     constructor(menuItems, config, callbacks) {
 
         // --- Dependencias (Desacopladas) ---
-        this.callbacks = callbacks; // { abrirModal, updateGridSelection, calculateAndApplyDimensions }
+        this.callbacks = callbacks; 
 
         // Referencias DOM y Constantes
         this.rueda = document.getElementById('rueda');
@@ -55,38 +50,31 @@ class RuedaDinamica {
         this.totalOpciones = menuItems.length;
         this.anguloPorOpcion = 360 / this.totalOpciones;
         this.halfOptions = this.totalOpciones / 2; 
+        this.initialAngles = null; // Se inicializa en el callback
 
         // Variables de Estado
         this.currentRadius = 0;
         this.indiceActual = 0;
-        this.rotacionObjetivoRueda = 0; // Se mantiene como el valor que se aplica a la variable CSS
-        this.animacionFrameId = null; 
+        this.rotacionObjetivoRueda = 0; // Valor aplicado a la variable CSS
         this.capaFondoActual = null;
-        this.isMobileView = false;
+        this.isMobileView = false; // Se inicializa en initializeView
         this.isScrolling = false;
         this.isRotatingFromClick = false;
-        this.opcionSeleccionadaAnterior = null; // Cache para la opción seleccionada
-        this.resizeTimeoutId = null; // ID del timeout para el debounce
+        this.opcionSeleccionadaAnterior = null; 
+        this.resizeTimeoutId = null; 
         
-        // 🚨 NUEVAS VARIABLES PARA OPTIMIZACIÓN DE FONDO (Acumulación)
+        // Variables para Optimización de Fondo (Acumulación)
         this.pendingBackgroundRemoval = null; 
         this.backgroundRemovalTimeoutId = null; 
 
-        // 🚀 NUEVO: Referencia a la variable CSS de rotación
+        // Referencia a la variable CSS de rotación
         this.ruedaRotacionCSSVar = '--rueda-rotacion-actual'; 
 
         // Inicialización y Eventos (La generación ahora es asíncrona)
         this.generarOpcionesOptimizada(() => {
-            // Callback que se ejecuta después de que todos los ítems se crean.
-            // Los initialAngles deben estar definidos después de que this.opciones se puebla
+            // Callback: Asegura que this.opciones esté poblado para calcular los ángulos
             this.initialAngles = Array.from(this.opciones).map((op, index) => index * this.anguloPorOpcion);
             this.attachEventListeners();
-
-            // Establece this.isMobileView
-            this.checkMobileView(); 
-            // ⚡️ OPTIMIZACIÓN: Activar 'will-change' solo si no es móvil y al inicio
-            this.setWillChangeState(!this.isMobileView); 
-            
             this.initializeView(true);
         });
     }
@@ -145,8 +133,6 @@ class RuedaDinamica {
      * Centraliza la gestión de will-change en la rueda y sus opciones.
      */
     setWillChangeState(activate) {
-        // En este diseño, 'will-change' se deja fijo en 'transform' en CSS,
-        // pero se mantiene esta función para el contenedor de fondo.
         const state = activate ? 'transform' : 'auto';
         if (this.rueda.style.willChange !== state) {
             this.rueda.style.willChange = state;
@@ -156,9 +142,9 @@ class RuedaDinamica {
     
     /**
      * Establece la rotación objetivo y dispara la transición CSS.
-     * NO HAY CÁLCULOS DE CORRECCIÓN AQUÍ.
+     * @private
      */
-    setTargetRotation() {
+    _applyTargetRotation() {
         if (this.isMobileView) return;
         
         // Aplica el valor de rotación inmediatamente a la variable CSS
@@ -199,30 +185,32 @@ class RuedaDinamica {
     }
 
     updateViewState() {
+        // Ejecutar checkMobileView para actualizar el estado antes de decidir
+        this.checkMobileView(); 
+
         // En el modo desktop, establecemos la rotación inicial.
         if (!this.isMobileView) {
-            // 🔧 CORRECCIÓN CLAVE: Eliminar la propiedad 'transform' para que el CSS
+            // CORRECCIÓN CLAVE: Eliminar la propiedad 'transform' para que el CSS
             // pueda tomar el control de la rotación mediante la variable CSS.
             this.rueda.style.transform = ''; 
 
             // El giro en pantalla es opuesto a la dirección de movimiento del índice
             this.rotacionObjetivoRueda = this.initialAngles[this.indiceActual] * -1;
-            this.setTargetRotation();
+            this._applyTargetRotation();
             this.setWillChangeState(true); // Activar will-change en desktop
         } else {
             // Estado Móvil
             // En móvil, la rueda se transforma a 'none' (para ser un contenedor de scroll)
             this.rueda.style.transform = `none`; 
-            this.scrollToSelectedIndex(this.indiceActual);
-            this.setWillChangeState(false); // Desactivar will-change en móvil
             // En móvil, forzamos la variable CSS a 0 para no interferir con el layout
             this.rueda.style.setProperty(this.ruedaRotacionCSSVar, `0deg`); 
+            this.scrollToSelectedIndex(this.indiceActual);
+            this.setWillChangeState(false); // Desactivar will-change en móvil
         }
     }
 
     /**
-     * OPTIMIZADO AL MÁXIMO: Gestiona la transición de fondos evitando la acumulación
-     * mediante la cancelación explícita de cualquier eliminación pendiente.
+     * Gestiona la transición de fondos evitando la acumulación de capas.
      */
     actualizarFondo() {
         const baseName = this.menuItems[this.indiceActual];
@@ -235,14 +223,11 @@ class RuedaDinamica {
         }
 
         // --- 1. CANCELACIÓN DE ELIMINACIÓN ANTERIOR (CLAVE para la optimización) ---
-        // Si hay un timeout pendiente de ejecutar (por un cambio rápido), lo cancelamos.
         if (this.backgroundRemovalTimeoutId) {
             clearTimeout(this.backgroundRemovalTimeoutId);
             this.backgroundRemovalTimeoutId = null; 
         }
 
-        // Si hay una capa anterior que estaba en proceso de ser eliminada, 
-        // la eliminamos inmediatamente porque una nueva capa la reemplazará.
         if (this.pendingBackgroundRemoval && this.backgroundContainer.contains(this.pendingBackgroundRemoval)) {
             this.pendingBackgroundRemoval.style.willChange = 'auto';
             this.backgroundContainer.removeChild(this.pendingBackgroundRemoval);
@@ -261,7 +246,7 @@ class RuedaDinamica {
         this.backgroundContainer.appendChild(nuevaCapa);
         this.capaFondoActual = nuevaCapa; // Establecer la nueva capa como la actual
 
-        // Forzar un repaint/reflow para que la transición de 'opacity' de 0 a 1 funcione.
+        // Forzar un repaint/reflow para que la transición funcione.
         void nuevaCapa.offsetWidth; 
         
         // Establecer la nueva capa como visible (opacidad: 1)
@@ -269,24 +254,19 @@ class RuedaDinamica {
 
         // --- 3. Gestionar la capa anterior (desvanecer y programar eliminación) ---
         if (capaAnterior) {
-            // Establecer la capa anterior a opacidad: 0
             capaAnterior.style.opacity = '0';
-            
-            // Establecer la capa anterior para su eliminación pendiente
             this.pendingBackgroundRemoval = capaAnterior;
 
             // Esperar a que termine la animación de opacidad antes de eliminar el elemento.
             this.backgroundRemovalTimeoutId = setTimeout(() => {
-                // Comprobación de seguridad
                 if (this.backgroundContainer.contains(capaAnterior)) {
                     capaAnterior.style.willChange = 'auto';
                     this.backgroundContainer.removeChild(capaAnterior);
                 }
-                // Limpiar las referencias después de la eliminación exitosa
                 this.pendingBackgroundRemoval = null;
                 this.backgroundRemovalTimeoutId = null;
 
-            }, this.config.animacionDuracionFondo); // animacionDuracionFondo: 600ms
+            }, this.config.animacionDuracionFondo); 
         }
     }
 
@@ -306,15 +286,25 @@ class RuedaDinamica {
         }
     }
 
-    rotarRueda(direccion) {
-        this.indiceActual = (this.indiceActual + direccion + this.totalOpciones) % this.totalOpciones;
+    /**
+     * @private
+     * Centraliza el cálculo de indiceActual y rotacionObjetivoRueda.
+     * @param {number} pasos - Número de pasos a rotar (positivo/negativo).
+     */
+    _updateRotationIndexAndTarget(pasos) {
+        // 1. Actualizar el índice (circular)
+        this.indiceActual = (this.indiceActual + pasos + this.totalOpciones) % this.totalOpciones;
 
+        // 2. Actualizar la rotación objetivo solo si no es móvil
         if (!this.isMobileView) {
             // El giro en pantalla es opuesto a la dirección de movimiento del índice
-            this.rotacionObjetivoRueda += (direccion * -1) * this.anguloPorOpcion; 
-            this.setTargetRotation();
+            this.rotacionObjetivoRueda += (pasos * -1) * this.anguloPorOpcion; 
+            this._applyTargetRotation();
         }
+    }
 
+    rotarRueda(direccion) {
+        this._updateRotationIndexAndTarget(direccion);
         this.actualizarSeleccion(true);
     }
 
@@ -330,6 +320,7 @@ class RuedaDinamica {
         
         const isRotationalKey = ['arrowleft', 'arrowright', 'a', 'd'].includes(key);
         const isVerticalKey = ['arrowup', 'arrowdown', 'w', 's'].includes(key);
+        const isEnterKey = key === 'enter';
 
         if (this.isMobileView) {
             if (isVerticalKey) {
@@ -337,6 +328,7 @@ class RuedaDinamica {
             }
         } else {
             if (isRotationalKey || isVerticalKey) {
+                // En desktop, todas las teclas direccionales controlan la rotación
                 direccion = (key === 'arrowright' || key === 'arrowdown' || key === 'd' || key === 's') ? 1 : -1;
             }
         }
@@ -347,7 +339,7 @@ class RuedaDinamica {
             return;
         }
 
-        if (key === 'enter') {
+        if (isEnterKey) {
             this.callbacks.abrirModal(this.menuItems[this.indiceActual]);
             event.preventDefault();
         }
@@ -376,67 +368,85 @@ class RuedaDinamica {
         const clickedOption = event.target.closest('.opcion');
         if (!clickedOption) return;
 
-        const index = parseInt(clickedOption.dataset.index, 10);
+        const targetIndex = parseInt(clickedOption.dataset.index, 10);
 
-        if (index === this.indiceActual) {
+        if (targetIndex === this.indiceActual) {
             this.callbacks.abrirModal(this.menuItems[this.indiceActual]);
             return;
         }
 
-        let diferenciaPasos = index - this.indiceActual;
+        let diferenciaPasos = targetIndex - this.indiceActual;
 
         if (!this.isMobileView) {
             this.isRotatingFromClick = true;
 
+            // Cálculo para la ruta de rotación más corta
             if (Math.abs(diferenciaPasos) > this.halfOptions) {
                 diferenciaPasos = (diferenciaPasos > 0) 
                     ? diferenciaPasos - this.totalOpciones 
                     : diferenciaPasos + this.totalOpciones;
             }
             
+            // Aplicar la rotación directamente sin usar _updateRotationIndexAndTarget
             // El giro en la rueda es opuesto al movimiento del índice
             this.rotacionObjetivoRueda += (diferenciaPasos * -1) * this.anguloPorOpcion;
-            this.setTargetRotation(); 
+            this._applyTargetRotation(); 
         }
         
-        this.indiceActual = index;
+        // Actualizar el índice y la selección
+        this.indiceActual = targetIndex;
         this.actualizarSeleccion(true);
     }
+
+    /**
+     * @private
+     * Lógica centralizada para la actualización de dimensiones y el estado de la vista.
+     */
+    _handleDimensionUpdateAndResizeLogic(initialLoad = false) {
+        const oldIsMobileView = this.isMobileView;
+        const newIsMobileView = this.checkMobileView(); 
+
+        // 1. Determinar si se necesita el cálculo de dimensiones (Costoso)
+        const shouldRunCostlyCalculation = initialLoad || newIsMobileView !== oldIsMobileView || this.currentRadius === 0;
+
+        if (shouldRunCostlyCalculation) {
+            const dimensionsResult = this.callbacks.calculateAndApplyDimensions(
+                this.rueda,
+                this.opciones,
+                this.initialAngles,
+                this.anguloPorOpcion,
+                this.totalOpciones
+            );
+            this.currentRadius = dimensionsResult.currentRadius;
+        }
+
+        // 2. Actualizar el estado de la vista si hubo cambio de breakpoint o es carga inicial
+        if (newIsMobileView !== oldIsMobileView || initialLoad) {
+            this.updateViewState();
+        }
+
+        // 3. Lógica de re-selección del grid (si aplica)
+        if (this.hayModalAbierto() && typeof this.callbacks.updateGridSelection === 'function') {
+            const gridIndex = window.currentGridIndex ?? 0;
+            // Se asume que los últimos 3 booleanos controlan la lógica de re-render/scroll
+            this.callbacks.updateGridSelection(gridIndex, true, true, true); 
+        }
+
+        // 4. Asegurar que la selección actual se aplique y el scroll/posición se realice
+        this.actualizarSeleccion(true);
+    }
+
 
     handleResize = () => {
         clearTimeout(this.resizeTimeoutId);
         this.resizeTimeoutId = setTimeout(() => {
-            const oldIsMobileView = this.isMobileView;
-            const newIsMobileView = this.checkMobileView(); 
-
-            const shouldRunCostlyCalculation = newIsMobileView !== oldIsMobileView || this.currentRadius === 0;
-
-            if (shouldRunCostlyCalculation) {
-                const dimensionsResult = this.callbacks.calculateAndApplyDimensions(
-                    this.rueda,
-                    this.opciones,
-                    this.initialAngles,
-                    this.anguloPorOpcion,
-                    this.totalOpciones
-                );
-                this.currentRadius = dimensionsResult.currentRadius;
-            }
-
-            if (newIsMobileView !== oldIsMobileView) {
-                this.updateViewState();
-            }
-
-            if (this.hayModalAbierto() && typeof this.callbacks.updateGridSelection === 'function') {
-                 const gridIndex = window.currentGridIndex ?? 0;
-                 this.callbacks.updateGridSelection(gridIndex, true, true, true); 
-            }
-
-            this.actualizarSeleccion(true);
+            this._handleDimensionUpdateAndResizeLogic(false);
         }, 100);
     }
 
     attachEventListeners() {
         document.addEventListener('keydown', this.handleKeyDown);
+        // Passive: false es necesario para usar event.preventDefault() en el scroll.
         document.addEventListener('wheel', this.handleWheel, { passive: false });
         this.rueda.addEventListener('click', this.handleClick);
         window.addEventListener('resize', this.handleResize);
@@ -448,32 +458,9 @@ class RuedaDinamica {
     
     // Función pública de inicialización
     initializeView(initialLoad = false) {
-        const oldIsMobileView = this.isMobileView;
-        const newIsMobileView = this.checkMobileView();
-        
-        // 1. Recalcular dimensiones (SIEMPRE en carga inicial)
-        const dimensionsResult = this.callbacks.calculateAndApplyDimensions(
-            this.rueda,
-            this.opciones,
-            this.initialAngles,
-            this.anguloPorOpcion,
-            this.totalOpciones
-        );
-        this.currentRadius = dimensionsResult.currentRadius;
-
-        // 2. Actualizar el estado de la vista
-        if (newIsMobileView !== oldIsMobileView || initialLoad) {
-            this.updateViewState();
-        }
-        
-        // 3. (Solo si un modal está abierto en la carga inicial)
-        if (this.hayModalAbierto() && typeof this.callbacks.updateGridSelection === 'function') {
-             const gridIndex = window.currentGridIndex ?? 0;
-             this.callbacks.updateGridSelection(gridIndex, true, true, true); 
-        }
-
-        // 4. Asegurar que la selección actual se aplique y el scroll se realice
-        this.actualizarSeleccion(true);
+        this.checkMobileView(); 
+        this.setWillChangeState(!this.isMobileView); 
+        this._handleDimensionUpdateAndResizeLogic(initialLoad);
     }
 }
 
