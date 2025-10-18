@@ -33,16 +33,10 @@ function triggerDownload(url) {
 
 /**
  * Función de respaldo para abrir la URL en una nueva pestaña.
+ * MODIFICADA: Usa window.open() para evitar la mitigación de seguimiento por rebote.
  */
 function openCleanPopup(url) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    // a.rel = 'noopener noreferrer'; // LÍNEA ELIMINADA PARA EVITAR ADVERTENCIA DE SEGUIMIENTO
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a); 
+    window.open(url, '_blank'); 
 }
 
 // --- Lógica de Extracción y Proxy Robusto ---
