@@ -1,9 +1,11 @@
-/* game-details.css - CSS Asíncrono para Detalles del Juego */
+/* game-details.css - CSS Asíncrono para Detalles del Juego OPTIMIZADO V3 (AJUSTE FINO RENDIMIENTO) */
 
 /* --- Estilos para el Menú de Detalles del Juego (Overlay SECUNDARIO) --- */
 .game-details-overlay {
     background-color: rgba(0, 0, 0, 0.7); 
     z-index: 2000; 
+    /* ✅ MANTENER: Aceleración para la transición de opacidad. */
+    transform: translateZ(0); 
 }
 
 .game-details-content {
@@ -18,24 +20,28 @@
     align-items: center;
     padding: 20px;
     position: relative;
-    transform: scale(0.95); 
+    /* ✅ MANTENER: Es el principal animado (escala). */
+    transform: scale(0.95) translate3d(0, 0, 0); 
     transition: transform 0.3s ease-in-out; 
+    will-change: transform; 
 }
 
 .game-details-overlay.open .game-details-content {
-    transform: scale(1); 
+    transform: scale(1) translate3d(0, 0, 0); 
 }
 
 .game-details-close {
     position: absolute; 
     top: 10px; 
     left: 10px; 
+    /* ❌ ELIMINADO: Estático. */
 }
 
 .game-details-close img {
     width: 30px; 
     height: 30px;
     transition: filter 0.2s ease;
+    /* ❌ ELIMINADO: Solo tiene transición de filter. */
 }
 
 .game-details-close:hover img {
@@ -50,6 +56,7 @@
     border-radius: 8px;
     margin-bottom: 15px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    /* ❌ ELIMINADO: Estático. */
 }
 
 #game-details-image {
@@ -57,6 +64,7 @@
     height: auto;
     object-fit: contain; 
     display: block;
+    /* ❌ ELIMINADO: Estático. */
 }
 
 .game-details-title {
@@ -65,6 +73,7 @@
     color: var(--color-text-white); 
     text-align: center;
     margin: 0 0 20px 0;
+    /* ❌ ELIMINADO: Estático. */
 }
 
 .game-details-body {
@@ -72,6 +81,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    /* ❌ ELIMINADO: Estático. */
 }
 
 .download-button {
@@ -84,13 +94,16 @@
     font-weight: bold;
     cursor: pointer;
     transition: background-color 0.2s, transform 0.1s; 
+    will-change: transform;
     width: 100%;
+    /* ✅ MANTENER: Se anima en hover. */
+    transform: translate3d(0, 0, 0);
 }
 
 .download-button:hover {
     background-color: var(--color-accent-hover); 
     color: var(--color-text-light); 
-    transform: scale(1.02); 
+    transform: scale(1.02) translate3d(0, 0, 0); 
 }
 
 /* Estilo para botón deshabilitado */
@@ -98,6 +111,6 @@
     background-color: var(--color-button-gray-light); 
     color: var(--color-text-dark);
     cursor: not-allowed;
-    transform: scale(1);
+    transform: scale(1) translate3d(0, 0, 0);
     opacity: 0.6; 
 }
