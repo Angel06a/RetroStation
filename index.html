@@ -5,13 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RetroStation</title>
 
+    <link rel="stylesheet" href="main-menu.css">
+
     <link rel="preload" href="Js/data.js" as="script">
     <link rel="preload" href="Js/utils.js" as="script">
-    <link rel="preload" href="Js/ui-logic.js" as="script">
-    <link rel="preload" href="Js/main-modal-manager.js" as="script">
     <link rel="preload" href="Js/game-data-loader.js" as="script">
-
-    <link rel="stylesheet" href="main-menu.css">
+    <link rel="preload" href="Js/main-modal-manager.js" as="script">
+    <link rel="preload" href="Js/game-grid-nav.js" as="script">
+    <link rel="preload" href="Js/mediafire-downloader.js" as="script">
+    <link rel="preload" href="Js/game-details-logic.js" as="script">
+    <link rel="preload" href="Js/ui-logic.js" as="script">
 
     <link rel="preload" href="grid-menu.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <link rel="preload" href="game-details.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -23,7 +26,7 @@
     <div id="background-container"></div>
 
     <main id="rueda" class="rueda" role="navigation">
-    </main>
+        </main>
 
     <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div id="modal-content" class="modal-content">
