@@ -1,4 +1,4 @@
-/* main-menu.css - CSS CRÍTICO OPTIMIZADO */
+/* main-menu.css - CSS CRÍTICO OPTIMIZADO V2 (AJUSTE FINO RENDIMIENTO) */
 
 /* 🟢 OPTIMIZACIÓN 6: Box-Sizing Global para un Layout Robusto */
 html {
@@ -84,7 +84,7 @@ body {
     transform: 
         translateY(-50%) 
         rotate(var(--rueda-rotacion-actual)) /* Rotación dinámica por JS */
-        translateZ(0); /* Aceleración por hardware */
+        translateZ(0); /* ✅ MANTENER */
         
     /* 🚀 CORRECCIÓN: Inicia rápido, frena suavemente al final */
     transition: transform 0.2s ease-out; 
@@ -119,7 +119,7 @@ body {
     transform: 
         translate(-50%, -50%) /* Centrado */
         rotate(calc(var(--rueda-rotacion-actual) * -1)) /* CONTRARROTACIÓN: Mantiene la horizontalidad */
-        translateZ(0); /* Aceleración por hardware */
+        translateZ(0); /* ✅ MANTENER */
 
     will-change: transform, filter; 
 }
@@ -136,12 +136,14 @@ body {
     /* Esta transición es para la escala, NO para la rotación */
     transition: transform 0.3s ease-out, filter 0.3s ease-out; 
     will-change: transform, filter; 
-    transform: none; 
+    /* ✅ REFUERZO: Aceleración a la imagen para la escala. */
+    transform: translateZ(0); 
 }
 
 /* Mantener el efecto de selección fuerte */
 .opcion.seleccionada img {
-    transform: scale(1.3) translateX(30px); 
+    /* ✅ REFUERZO: Usar 3D para reforzar la escala */
+    transform: scale(1.3) translateX(30px) translateZ(0); 
     filter: drop-shadow(0px 4px 15px rgba(0, 0, 0, 0.6)); 
 }
 
@@ -156,7 +158,10 @@ body {
     visibility: hidden;
     justify-content: center;
     align-items: center;
-    transition: opacity 0.3s ease-in-out, visibility 0.3s; 
+    /* ✅ REFUERZO: Aceleración a los overlays para la transición de opacidad */
+    transform: translateZ(0);
+    transition: opacity 0.3s ease-in-out, visibility 0.3s, transform 0s; 
+    will-change: opacity, transform;
 }
 
 .modal-overlay.open, .game-details-overlay.open {
@@ -201,6 +206,8 @@ body {
         max-height: 100vh;
         
         transition: none !important; 
+        /* ✅ REFUERZO CRÍTICO: Aceleración para el scrolling/movimiento en móvil. */
+        transform: translateZ(0) !important; 
     }
 
     /* 2. Opciones individuales dentro de la cinta (.opcion) */
@@ -243,7 +250,8 @@ body {
     
     /* Realzar el icono seleccionado */
     .opcion.seleccionada img {
-         transform: scale(1.2) !important; 
+         /* ✅ REFUERZO: Usar 3D para reforzar la escala */
+         transform: scale(1.2) translateZ(0) !important; 
          filter: drop-shadow(0 0 10px var(--color-accent)) !important;
     }
     
