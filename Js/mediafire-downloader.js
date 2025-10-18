@@ -3,12 +3,6 @@
 // VERSIÓN FINAL COMPLETA:
 // 1. Descarga individual: Sin caché para funcionar siempre en móvil.
 // 2. Carpetas: Funciones completas restauradas y robustas con Timeout de 15s.
-//
-// AJUSTE DE SOLUCIÓN AL AVISO DE CHROME (V3):
-// La función 'openCleanPopup' (el fallback a la nueva pestaña) ha sido
-// eliminada/reemplazada por una REDIRECCIÓN SIMPLE (window.location.href),
-// que es la mejor práctica para evitar el aviso de "navegación sin interacción"
-// después de una operación asíncrona.
 // =========================================================================
 
 const linkCache = new Map(); // Se mantiene la variable, pero se ignora para archivos individuales.
@@ -38,14 +32,17 @@ function triggerDownload(url) {
 }
 
 /**
- * Función de respaldo para abrir la URL, ahora usa una redirección
- * en la pestaña actual para EVITAR el aviso de "navegación sin interacción"
- * después de una llamada asíncrona (fetch/proxy).
+ * Función de respaldo para abrir la URL en una nueva pestaña.
  */
-function fallbackOpenUrl(url) {
-    // Redireccionamos la pestaña actual. Si el usuario desea mantener la página,
-    // tendrá que abrir el enlace en una nueva pestaña manualmente.
-    window.location.href = url;
+function openCleanPopup(url) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    // a.rel = 'noopener noreferrer'; // LÍNEA ELIMINADA PARA EVITAR ADVERTENCIA DE SEGUIMIENTO
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a); 
 }
 
 // --- Lógica de Extracción y Proxy Robusto ---
@@ -320,12 +317,12 @@ async function downloadMultipleFiles(files, buttonElement) {
         buttonElement.textContent = message;
     };
     
-    updateButtonStatus(`Iniciando descarga de ${total} archivos (0/${total})...`);
+    updateButtonStatus(`📁 Iniciando descarga de ${total} archivos (0/${total})...`);
     
     for (let file of files) {
         try {
             const actionText = 'Descargando';
-            updateButtonStatus(`${actionText} (${downloaded + 1}/${total}): ${file.name}`);
+            updateButtonStatus(`📁 ${actionText} (${downloaded + 1}/${total}): ${file.name}`);
 
             // Esta llamada usa el proxy robusto (method2_externalServices)
             const directUrl = await method2_externalServices(file.url);
@@ -341,12 +338,10 @@ async function downloadMultipleFiles(files, buttonElement) {
         }
     }
     
-    updateButtonStatus(`${downloaded}/${total} archivos procesados`);
+    updateButtonStatus(`✅ ${downloaded}/${total} archivos procesados`);
     
-    // Si ninguna descarga se inició, abrimos el link del primer archivo como fallback
     if (downloaded === 0 && total > 0) {
-        updateButtonStatus(`FALLBACK: Redirigiendo a ${files[0].name}`);
-        fallbackOpenUrl(files[0].url);
+        openCleanPopup(files[0].url);
     }
 }
 
@@ -369,12 +364,12 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
     if (mediafireUrl.includes('/folder/')) {
         // Lógica de Carpeta
         try {
-            updateButtonStatus('Buscando archivos en carpeta...');
+            updateButtonStatus('🔍 Buscando archivos en carpeta...');
             
             const folderKey = extractFolderKey(mediafireUrl);
             if (!folderKey) {
-                updateButtonStatus('URL de carpeta no válida, redirigiendo...');
-                fallbackOpenUrl(mediafireUrl); 
+                updateButtonStatus('❌ URL de carpeta no válida, abriendo link...');
+                openCleanPopup(mediafireUrl); 
                 return;
             }
             
@@ -384,14 +379,14 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
                 await downloadMultipleFiles(files, buttonElement);
                 
             } else {
-                updateButtonStatus('Carpeta vacía o error, redirigiendo...');
-                fallbackOpenUrl(mediafireUrl);
+                updateButtonStatus('❌ Carpeta vacía o error, abriendo link...');
+                openCleanPopup(mediafireUrl);
             }
             
         } catch (error) {
             console.error('Error en el manejo de carpeta:', error);
-            updateButtonStatus('Error, redirigiendo...');
-            fallbackOpenUrl(mediafireUrl);
+            updateButtonStatus('❌ Error, abriendo link...');
+            openCleanPopup(mediafireUrl);
         }
         
     } else {
@@ -406,13 +401,13 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
                 triggerDownload(directUrl);
                 updateButtonStatus('Descargando...');
             } else {
-                // Si el proxy FALLÓ, se ejecuta el fallback (Redirección).
-                updateButtonStatus('FALLBACK: Redirigiendo link...');
-                fallbackOpenUrl(mediafireUrl); 
+                // Si el proxy FALLÓ, se ejecuta el fallback.
+                updateButtonStatus('Abriendo link (FALLBACK)');
+                openCleanPopup(mediafireUrl); 
             }
         } catch(e) {
-            updateButtonStatus('Error. Redirigiendo link...');
-            fallbackOpenUrl(mediafireUrl);
+            updateButtonStatus('Error. Abriendo link...');
+            openCleanPopup(mediafireUrl);
         }
     }
     
