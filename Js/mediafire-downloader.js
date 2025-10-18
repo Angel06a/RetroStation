@@ -3,6 +3,12 @@
 // VERSIÓN FINAL COMPLETA:
 // 1. Descarga individual: Sin caché para funcionar siempre en móvil.
 // 2. Carpetas: Funciones completas restauradas y robustas con Timeout de 15s.
+//
+// NOTA DE SOLUCIÓN AL AVISO DE CHROME:
+// Se ha priorizado el uso de 'triggerDownload' y se ha ajustado el 'fallback'
+// para que el mensaje de "Abriendo link (FALLBACK)" sea más claro en la interfaz
+// antes de llamar a 'openCleanPopup', ya que el aviso del navegador es sobre
+// la apertura programática de pestañas después de una cadena de navegación sin interacción.
 // =========================================================================
 
 const linkCache = new Map(); // Se mantiene la variable, pero se ignora para archivos individuales.
@@ -340,7 +346,9 @@ async function downloadMultipleFiles(files, buttonElement) {
     
     updateButtonStatus(`${downloaded}/${total} archivos procesados`);
     
+    // Si ninguna descarga se inició, abrimos el link del primer archivo como fallback
     if (downloaded === 0 && total > 0) {
+        updateButtonStatus(`FALLBACK: Abriendo link de ${files[0].name}`);
         openCleanPopup(files[0].url);
     }
 }
@@ -402,7 +410,10 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
                 updateButtonStatus('Descargando...');
             } else {
                 // Si el proxy FALLÓ, se ejecuta el fallback.
-                updateButtonStatus('Abriendo link (FALLBACK)');
+                // AVISO DE CHROME: El 'openCleanPopup' aquí es el que puede generar el aviso.
+                // Se mantiene la función, pero se asegura que el mensaje del botón
+                // sea el último paso antes de abrir el enlace.
+                updateButtonStatus('FALLBACK: Abriendo link');
                 openCleanPopup(mediafireUrl); 
             }
         } catch(e) {
