@@ -7,6 +7,9 @@
 // -------------------------------------------------------------------------
 // NOTA DE CAMBIO: Se elimina el cálculo de corrección visual (applyVisualCorrection)
 // y se delega toda la rotación y contrarrotación a la propiedad 'transition' de CSS.
+//
+// 🔧 CORRECCIÓN: Se ajusta updateViewState para manejar correctamente la transición
+// entre vista móvil y escritorio, eliminando 'transform: none' en escritorio.
 // =========================================================================
 
 // --- 0. Configuraciones Comunes (Mejorar Cohesión) ---
@@ -198,13 +201,18 @@ class RuedaDinamica {
     updateViewState() {
         // En el modo desktop, establecemos la rotación inicial.
         if (!this.isMobileView) {
+            // 🔧 CORRECCIÓN CLAVE: Eliminar la propiedad 'transform' para que el CSS
+            // pueda tomar el control de la rotación mediante la variable CSS.
+            this.rueda.style.transform = ''; 
+
             // El giro en pantalla es opuesto a la dirección de movimiento del índice
             this.rotacionObjetivoRueda = this.initialAngles[this.indiceActual] * -1;
             this.setTargetRotation();
             this.setWillChangeState(true); // Activar will-change en desktop
         } else {
             // Estado Móvil
-            this.rueda.style.transform = `none`;
+            // En móvil, la rueda se transforma a 'none' (para ser un contenedor de scroll)
+            this.rueda.style.transform = `none`; 
             this.scrollToSelectedIndex(this.indiceActual);
             this.setWillChangeState(false); // Desactivar will-change en móvil
             // En móvil, forzamos la variable CSS a 0 para no interferir con el layout
