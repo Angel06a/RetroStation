@@ -357,7 +357,9 @@ class RuedaDinamica {
     handleWheel = (event) => {
         if (this.hayModalAbierto() || this.isMobileView) return;
 
-        event.preventDefault();
+        // ** CORRECCIÓN: Ahora es seguro llamar a preventDefault()
+        // ya que el listener se registra con { passive: false }.
+        event.preventDefault(); 
 
         // ⚡️ OPTIMIZACIÓN 10: Asegurar que el scrollTimeout sea suficiente para evitar rotaciones múltiples
         if (this.isScrolling) return;
@@ -420,7 +422,9 @@ class RuedaDinamica {
 
     attachEventListeners() {
         document.addEventListener('keydown', this.handleKeyDown);
-        document.addEventListener('wheel', this.handleWheel);
+        // 🔴 CORRECCIÓN CLAVE: El listener 'wheel' en 'document' debe ser NO pasivo
+        // para permitir el uso de event.preventDefault() sin generar la advertencia.
+        document.addEventListener('wheel', this.handleWheel, { passive: false });
         this.rueda.addEventListener('click', this.handleClick);
         window.addEventListener('resize', this.handleResize);
     }
