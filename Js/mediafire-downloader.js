@@ -1,9 +1,7 @@
 // =========================================================================
 // mediafire-downloader.js: Lógica de Descarga Directa y Manejo de Carpetas
-// ADAPTACIÓN: Descarga todos los archivos de una carpeta secuencialmente, 
-// sin ventana de selección.
-// MODIFICACIÓN: Implementación de lógica móvil (detección y uso de openCleanPopup)
-// para FORZAR la apertura/descarga del LINK DIRECTO extraído por el proxy.
+// MODIFICACIÓN CRÍTICA: Implementación de fetchWithTimeout para aumentar
+// la robustez de las llamadas a proxy en redes móviles inestables.
 // =========================================================================
 
 const linkCache = new Map();
@@ -11,22 +9,26 @@ const folderCache = new Map();
 
 // --- Utilidades Básicas ---
 
-// Detecta si el agente de usuario parece ser un dispositivo móvil
+/**
+ * Detecta si el agente de usuario parece ser un dispositivo móvil.
+ */
 function isMobile() {
     return /Mobi/i.test(navigator.userAgent) || /Android/i.test(navigator.userAgent);
 }
 
+/**
+ * Inicia la descarga o abre el enlace directo.
+ * Usa lógica diferente para PC vs. Móvil.
+ */
 function triggerDownload(url) {
-    // Si estamos en un dispositivo móvil, usamos openCleanPopup.
-    // Esto asegura que la URL de descarga directa (obtenida por el proxy)
-    // se abra en una nueva pestaña, evitando el bloqueo de "a.click()" programático
-    // que es común en Chrome/Safari móvil para descargas que no son gestos directos.
     if (isMobile()) {
+        // COMPORTAMIENTO MÓVIL: Usa openCleanPopup para abrir el LINK DIRECTO
+        // (obtenido por el proxy) en una nueva pestaña, evitando bloqueos.
         openCleanPopup(url);
         return;
     }
     
-    // Lógica original para PC (descarga automática sin nueva ventana)
+    // COMPORTAMIENTO PC: Descarga automática (el navegador lo permite).
     const a = document.createElement('a');
     a.href = url;
     a.download = '';
@@ -36,6 +38,9 @@ function triggerDownload(url) {
     document.body.removeChild(a);
 }
 
+/**
+ * Abre la URL en una nueva pestaña limpia (esencial para móvil).
+ */
 function openCleanPopup(url) {
     const a = document.createElement('a');
     a.href = url;
@@ -69,9 +74,33 @@ function extractFromHTML(html) {
     return null;
 }
 
+/**
+ * Función auxiliar para realizar fetch con un límite de tiempo (timeout).
+ * Esto evita que las llamadas a proxy se queden colgadas en redes lentas (móvil).
+ */
+async function fetchWithTimeout(resource, options = {}) {
+    const { timeout = 7000 } = options; // 7 segundos de timeout
+    
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+
+    try {
+        const response = await fetch(resource, {
+            ...options,
+            signal: controller.signal  
+        });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        // Si es un error de aborto (timeout) o de red, lanzamos para que se pruebe el siguiente proxy
+        throw error;
+    }
+}
+
 async function method2_externalServices(mediafireUrl) {
+    // La lista de servicios proxy
     const services = [
-        // CORRECCIÓN: 'quest' cambiado a 'request' - La implementación ya es correcta
         `https://api.codetabs.com/v1/proxy?request=${encodeURIComponent(mediafireUrl)}`, 
         `https://corsproxy.io/?${encodeURIComponent(mediafireUrl)}`,
         `https://api.allorigins.win/raw?url=${encodeURIComponent(mediafireUrl)}`,
@@ -79,21 +108,24 @@ async function method2_externalServices(mediafireUrl) {
     
     for (let service of services) {
         try {
-            const response = await fetch(service);
+            // USAMOS fetchWithTimeout PARA DAR MÁS ROBUSTEZ EN MÓVIL
+            const response = await fetchWithTimeout(service, { timeout: 7000 });
+            
             if (response.ok) {
-                let html;
-                if (service.includes('allorigins.win')) {
-                    const data = await response.json();
-                    html = data.contents;
-                } else {
-                    html = await response.text();
+                let html = await response.text();
+                
+                // Limpieza de posible envoltorio JSON del proxy (aunque use /raw)
+                if (html.startsWith('{"contents":')) {
+                     const data = JSON.parse(html);
+                     html = data.contents;
                 }
                 
                 const directLink = extractFromHTML(html);
                 if (directLink) return directLink;
             }
         } catch (error) {
-            continue;
+            // Captura errores de red, de timeout o de parseo, y pasa al siguiente proxy.
+            continue; 
         }
     }
     return null;
@@ -150,6 +182,7 @@ async function getFolderContents(folderKey) {
 }
 
 async function getFolderViaAPI(folderKey) {
+    // Usamos fetch normal aquí, ya que es una API de MediaFire, no un proxy de scraping.
     try {
         const apiUrl = `https://www.mediafire.com/api/1.5/folder/get_content.php?r=qtg&content_type=files&filter=all&order_by=name&order_direction=asc&chunk=1&version=1.5&folder_key=${folderKey}&response_format=json`;
         
@@ -171,11 +204,12 @@ async function getFolderViaAPI(folderKey) {
 }
 
 async function getFolderViaScraping(folderKey) {
+    // Usamos fetchWithTimeout para el scraping proxy.
     try {
         const folderUrl = `https://www.mediafire.com/folder/${folderKey}`;
         const service = `https://api.allorigins.win/raw?url=${encodeURIComponent(folderUrl)}`;
         
-        const response = await fetch(service);
+        const response = await fetchWithTimeout(service, { timeout: 7000 });
         if (response.ok) {
             const html = await response.text();
             return parseFolderHTML(html, folderKey);
@@ -244,10 +278,10 @@ function parseFolderHTML(html, folderKey) {
 }
 
 async function getFolderViaExternalService(folderKey) {
-    // Usar un servicio de scraping más avanzado
+    // Usamos fetchWithTimeout para el servicio externo.
     try {
         const serviceUrl = `https://r.jina.ai/https://www.mediafire.com/folder/${folderKey}`;
-        const response = await fetch(serviceUrl);
+        const response = await fetchWithTimeout(serviceUrl, { timeout: 7000 });
         
         if (response.ok) {
             const content = await response.text();
@@ -294,8 +328,7 @@ async function getFolderViaExternalService(folderKey) {
 async function downloadMultipleFiles(files, buttonElement) {
     const total = files.length;
     let downloaded = 0;
-    
-    const isMobileDevice = isMobile();
+    const isMobileDevice = isMobile(); 
     
     const updateButtonStatus = (message) => {
         buttonElement.textContent = message;
@@ -306,19 +339,16 @@ async function downloadMultipleFiles(files, buttonElement) {
     // Descarga secuencial de archivos
     for (let file of files) {
         try {
-            // Mensaje adaptado para móvil
             const actionText = isMobileDevice ? 'Abriendo link directo' : 'Descargando';
             updateButtonStatus(`📁 ${actionText} (${downloaded + 1}/${total}): ${file.name}`);
-            
-            // EL PROXY SIEMPRE SE EJECUTA AQUI PARA OBTENER EL ENLACE DIRECTO
+
+            // EL PROXY SE EJECUTA AQUÍ (AUMENTADA LA ROBUSTEZ CON TIMEOUT)
             const directUrl = await method2_externalServices(file.url);
             
             if (directUrl) {
-                // Se usa triggerDownload, que internamente usa openCleanPopup si es móvil.
-                triggerDownload(directUrl); 
+                // Si el proxy tiene éxito, triggerDownload usará el link directo.
+                triggerDownload(directUrl);
                 downloaded++;
-                
-                // Espera 1 segundo entre descargas para evitar bloqueos
                 await new Promise(resolve => setTimeout(resolve, 1000)); 
             }
         } catch (error) {
@@ -343,7 +373,7 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
 
     buttonElement.disabled = true;
     const originalText = buttonElement.textContent;
-    const isMobileDevice = isMobile();
+    const isMobileDevice = isMobile(); 
     
     const updateButtonStatus = (message) => {
         buttonElement.textContent = message;
@@ -366,7 +396,6 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
             const files = await getFolderContents(folderKey);
             
             if (files && files.length > 0) {
-                // Descargar TODOS los archivos directamente
                 await downloadMultipleFiles(files, buttonElement);
                 
             } else {
@@ -388,17 +417,17 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
                 triggerDownload(linkCache.get(mediafireUrl));
             } else {
                 updateButtonStatus('Obteniendo enlace directo...');
-                // LLAMADA AL PROXY
+                // LLAMADA AL PROXY CON TIMEOUT
                 const directUrl = await method2_externalServices(mediafireUrl);
                 
                 if (directUrl) {
+                    // SI EL PROXY TUVO ÉXITO (Y NO EXPIRÓ POR TIMEOUT)
                     linkCache.set(mediafireUrl, directUrl);
-                    // triggerDownload usará openCleanPopup si es móvil, con la directUrl.
                     triggerDownload(directUrl);
                     updateButtonStatus(isMobileDevice ? '✅ Abriendo descarga en nueva pestaña' : 'Descargando...');
                 } else {
+                    // Si el proxy FALLÓ (por rechazo o timeout), se ejecuta el fallback de abrir el link original.
                     updateButtonStatus('Abriendo link (FALLBACK)');
-                    // Se abre el link original de MediaFire solo si el proxy FALLÓ.
                     openCleanPopup(mediafireUrl);
                 }
             }
