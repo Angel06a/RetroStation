@@ -1,6 +1,8 @@
 // =========================================================================
 // mediafire-downloader.js: Lógica de Descarga Directa y Manejo de Carpetas
 // MODIFICADO: Funciones de manejo de carpetas hechas globales para la secuencia.
+// ELIMINADA: La función openCleanPopup() y su uso en el fallback para evitar
+// la simulación de clic que podría estar contribuyendo al aviso de Chrome.
 // =========================================================================
 
 const linkCache = new Map(); 
@@ -16,7 +18,7 @@ function isMobile() {
 }
 
 /**
- * Inicia la descarga o abre el enlace directo.
+ * Inicia la descarga.
  */
 function triggerDownload(url) {
     // Intentamos iniciar la descarga en la pestaña actual (igual para PC y Móvil).
@@ -27,20 +29,6 @@ function triggerDownload(url) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-}
-
-/**
- * Función de respaldo para abrir la URL en una nueva pestaña.
- */
-function openCleanPopup(url) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a); 
 }
 
 // --- Lógica de Extracción y Proxy Robusto ---
@@ -97,9 +85,14 @@ async function method2_externalServices(mediafireUrl) {
             if (response.ok) {
                 let html = await response.text();
                 
+                // allorigins.win a veces envuelve la respuesta en un JSON
                 if (service.includes('allorigins.win') && html.startsWith('{"contents":')) {
-                     const data = JSON.parse(html);
-                     html = data.contents;
+                     try {
+                         const data = JSON.parse(html);
+                         html = data.contents;
+                     } catch (e) {
+                         // Si falla el parseo, usamos el HTML crudo
+                     }
                 }
                 
                 const directLink = extractFromHTML(html);
@@ -220,7 +213,6 @@ async function getFolderContents(folderKey) {
     try {
         files = await getFolderViaAPI(folderKey);
         if (files.length === 0) files = await getFolderViaScraping(folderKey);
-        // Si tienes un método de servicio externo, agrégalo aquí
     } catch (error) {
         console.log('Error al obtener contenido de carpeta, usando el método alternativo si es necesario.');
     }
@@ -241,8 +233,13 @@ async function getDirectDownloadLink(mediafireUrl) {
     if (mediafireUrl.includes('/folder/')) {
         return null; 
     }
+    if (linkCache.has(mediafireUrl)) {
+        return linkCache.get(mediafireUrl);
+    }
+    
     try {
         const directUrl = await method2_externalServices(mediafireUrl);
+        if (directUrl) linkCache.set(mediafireUrl, directUrl);
         return directUrl; 
     } catch (e) {
         console.error("Error al precargar link:", e);
@@ -269,18 +266,26 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
     // Lógica de Archivo Individual (ASÍNCRONO - método antiguo/fallback)
     try {
         updateButtonStatus('Obteniendo enlace directo...');
-        const directUrl = await method2_externalServices(mediafireUrl);
+        // Priorizar el link en cache si existe, sino lo intenta de nuevo
+        let directUrl = linkCache.get(mediafireUrl);
+        
+        if (!directUrl) {
+            directUrl = await method2_externalServices(mediafireUrl);
+        }
         
         if (directUrl) {
             triggerDownload(directUrl);
             updateButtonStatus('Descargando...');
         } else {
-            updateButtonStatus('Abriendo link (FALLBACK)');
-            openCleanPopup(mediafireUrl); 
+            // FALLBACK SIN POPUP: Intentamos la descarga directa con el URL de MediaFire
+            // Si el navegador lo permite, iniciará la descarga, sino, no pasará nada.
+            triggerDownload(mediafireUrl); 
+            updateButtonStatus('Descarga iniciada...'); 
         }
     } catch(e) {
-        updateButtonStatus('Error. Abriendo link...');
-        openCleanPopup(mediafireUrl);
+        // En caso de error, intentamos la descarga directa con el URL original de MediaFire
+        updateButtonStatus('Error. Intentando descarga directa...');
+        triggerDownload(mediafireUrl); 
     }
     
     setTimeout(() => {
