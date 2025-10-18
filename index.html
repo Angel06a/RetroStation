@@ -4,28 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RetroStation</title>
-    
+
     <link rel="preload" href="Js/data.js" as="script">
     <link rel="preload" href="Js/utils.js" as="script">
     <link rel="preload" href="Js/ui-logic.js" as="script">
     <link rel="preload" href="Js/main-modal-manager.js" as="script">
     <link rel="preload" href="Js/game-data-loader.js" as="script">
-    
-    <link rel="stylesheet" href="main-menu.css"> 
-    
+
+    <link rel="stylesheet" href="main-menu.css">
+
     <link rel="preload" href="grid-menu.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <link rel="preload" href="game-details.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    
+
     <link rel="preload" href="Icons/back.svg" as="image">
     <link rel="icon" href="Icons/favicon.png" type="image/png">
 </head>
-<body>
-    
+<body data-modal-open="false">
     <div id="background-container"></div>
-    
+
     <main id="rueda" class="rueda" role="navigation">
     </main>
-    
+
     <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div id="modal-content" class="modal-content">
             <header id="modal-header" class="modal-header">
@@ -34,18 +33,18 @@
                 </button>
                 <img id="modal-image" src="" alt="Imagen de sistema">
             </header>
-            
+
             <div class="modal-body">
                 <div id="content-grid-container" class="content-grid-container">
                     </div>
-                <h2 id="modal-title"></h2> 
+                <h2 id="modal-title"></h2>
             </div>
         </div>
     </div>
 
     <div id="game-details-overlay" class="game-details-overlay" role="dialog" aria-modal="true" aria-labelledby="game-details-title">
         <div id="game-details-content" class="game-details-content">
-            
+
             <button id="game-details-close" class="game-details-close" aria-label="Cerrar detalles del juego">
                 <img src="Icons/back.svg" alt="Atrás" title="Cerrar detalles">
             </button>
@@ -63,7 +62,7 @@
             </div>
         </div>
     </div>
-    
+
     <script src="Js/data.js" defer></script>
     <script src="Js/utils.js" defer></script>
     <script src="Js/game-data-loader.js" defer></script>
