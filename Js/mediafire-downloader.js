@@ -1,7 +1,7 @@
 // =========================================================================
 // mediafire-downloader.js: Lógica de Descarga Directa y Manejo de Carpetas
-// MODIFICACIÓN CRÍTICA: Implementación de fetchWithTimeout de 15s y uso de 
-// un proxy adicional (Google Translate) para bypass de User-Agent en móvil.
+// MODIFICACIÓN: Exclusión de translate.google.com y api.codetabs.com.
+// MEJORA: Timeout de 15 segundos para la extracción vía proxy en móvil.
 // =========================================================================
 
 const linkCache = new Map();
@@ -55,7 +55,7 @@ function openCleanPopup(url) {
 // --- Lógica de Archivos Individuales y Extracción ---
 
 function extractFromHTML(html) {
-    // Patrones clave para el enlace directo de MediaFire (adaptados de download.js)
+    // Patrones clave para el enlace directo de MediaFire
     const patterns = [
         /id="downloadButton".*?href="(.*?)"/,
         new RegExp('href="(https:\\/\\/download[0-9]*\\.mediafire\\.com\\/[^"]*)"'),
@@ -78,8 +78,7 @@ function extractFromHTML(html) {
  * Esto es vital para acomodar la inestabilidad de las redes móviles.
  */
 async function fetchWithTimeout(resource, options = {}) {
-    // AUMENTAMOS EL TIMEOUT A 15 SEGUNDOS
-    const { timeout = 15000 } = options; 
+    const { timeout = 15000 } = options; // 15 segundos de timeout
     
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
@@ -93,45 +92,32 @@ async function fetchWithTimeout(resource, options = {}) {
         return response;
     } catch (error) {
         clearTimeout(id);
+        // Si hay error de red o timeout, lo lanzamos para que se pruebe el siguiente proxy.
         throw error;
     }
 }
 
 async function method2_externalServices(mediafireUrl) {
-    // Lista de servicios proxy, con el proxy de Google Translate añadido al principio.
+    // Lista de servicios proxy, con los solicitados excluidos.
     const services = [
-        // INTENTO 1: Bypass de User-Agent con Google Translate (robusto en móvil)
-        `https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(mediafireUrl)}`,
-        // INTENTO 2: Codetabs (proxy CORS estándar)
-        `https://api.codetabs.com/v1/proxy?request=${encodeURIComponent(mediafireUrl)}`, 
-        // INTENTO 3: corsproxy.io (proxy CORS estándar)
+        // PROXY 1: corsproxy.io
         `https://corsproxy.io/?${encodeURIComponent(mediafireUrl)}`,
-        // INTENTO 4: allorigins.win (proxy CORS estándar)
+        // PROXY 2: allorigins.win
         `https://api.allorigins.win/raw?url=${encodeURIComponent(mediafireUrl)}`,
     ];
     
     for (let service of services) {
         try {
-            // USAMOS fetchWithTimeout DE 15s EN TODOS LOS PROXIES
+            // USAMOS fetchWithTimeout DE 15s
             const response = await fetchWithTimeout(service, { timeout: 15000 });
             
             if (response.ok) {
                 let html = await response.text();
                 
-                // Si el proxy es Google Translate, extraemos el contenido del iframe o del wrapper.
-                if (service.includes('translate.google.com')) {
-                    // El HTML de Google Translate envuelve la página dentro de un iframe/wrapper.
-                    // Buscamos el contenido real dentro de la etiqueta <base>
-                    const baseMatch = html.match(/<base href="[^"]*">([\s\S]*?)<\/html>/i);
-                    if (baseMatch && baseMatch[1]) {
-                        html = baseMatch[1];
-                    }
-                } else {
-                    // Limpieza de posible envoltorio JSON de otros proxies (si usan /raw)
-                    if (html.startsWith('{"contents":')) {
-                         const data = JSON.parse(html);
-                         html = data.contents;
-                    }
+                // Limpieza de posible envoltorio JSON de allorigins.win
+                if (service.includes('allorigins.win') && html.startsWith('{"contents":')) {
+                     const data = JSON.parse(html);
+                     html = data.contents;
                 }
                 
                 const directLink = extractFromHTML(html);
@@ -145,7 +131,7 @@ async function method2_externalServices(mediafireUrl) {
     return null;
 }
 
-// --- Lógica de Carpetas (Adaptada de download.js) ---
+// --- Lógica de Carpetas (Restaurada desde versiones anteriores) ---
 
 function extractFolderKey(folderUrl) {
     const matches = folderUrl.match(/mediafire\.com\/folder\/([a-zA-Z0-9]+)/);
@@ -157,12 +143,185 @@ async function getFolderContents(folderKey) {
         return folderCache.get(folderKey);
     }
     
-    // Aquí se omite el detalle de las funciones de carpeta (getFolderViaAPI, getFolderViaScraping, etc.)
-    // ya que no son el foco del problema y se asume que usan fetchWithTimeout
+    console.log('Buscando archivos para carpeta:', folderKey);
     
-    return []; // Placeholder. Las funciones reales deben ser portadas desde el archivo anterior.
+    // Método 1: API directa de MediaFire
+    try {
+        const apiFiles = await getFolderViaAPI(folderKey);
+        if (apiFiles.length > 0) {
+            folderCache.set(folderKey, apiFiles);
+            return apiFiles;
+        }
+    } catch (error) {
+        console.log('Método API falló:', error);
+    }
+    
+    // Método 2: Scraping mejorado
+    try {
+        const scrapedFiles = await getFolderViaScraping(folderKey);
+        if (scrapedFiles.length > 0) {
+            folderCache.set(folderKey, scrapedFiles);
+            return scrapedFiles;
+        }
+    } catch (error) {
+        console.log('Método scraping falló:', error);
+    }
+    
+    // Método 3: Servicio externo especializado (Jina AI Reader)
+    try {
+        const externalFiles = await getFolderViaExternalService(folderKey);
+        if (externalFiles.length > 0) {
+            folderCache.set(folderKey, externalFiles);
+            return externalFiles;
+        }
+    } catch (error) {
+        console.log('Método externo falló:', error);
+    }
+    
+    return [];
 }
 
+async function getFolderViaAPI(folderKey) {
+    try {
+        const apiUrl = `https://www.mediafire.com/api/1.5/folder/get_content.php?r=qtg&content_type=files&filter=all&order_by=name&order_direction=asc&chunk=1&version=1.5&folder_key=${folderKey}&response_format=json`;
+        
+        const response = await fetch(apiUrl); // Fetch normal para API directa
+        if (response.ok) {
+            const data = await response.json();
+            if (data.response && data.response.folder_content && data.response.folder_content.files) {
+                return data.response.folder_content.files.map(file => ({
+                    name: file.filename,
+                    url: `https://www.mediafire.com/file/${file.quickkey}`,
+                    key: file.quickkey,
+                }));
+            }
+        }
+    } catch (error) {
+        console.error('Error API MediaFire:', error);
+    }
+    return [];
+}
+
+async function getFolderViaScraping(folderKey) {
+    try {
+        const folderUrl = `https://www.mediafire.com/folder/${folderKey}`;
+        const service = `https://api.allorigins.win/raw?url=${encodeURIComponent(folderUrl)}`;
+        
+        const response = await fetchWithTimeout(service, { timeout: 15000 }); // Usamos timeout aquí
+        if (response.ok) {
+            const html = await response.text();
+            return parseFolderHTML(html, folderKey);
+        }
+    } catch (error) {
+        console.error('Error scraping:', error);
+    }
+    return [];
+}
+
+function parseFolderHTML(html, folderKey) {
+    const files = [];
+    
+    // PATRÓN 1: Buscar elementos con data-key
+    const dataKeyPattern = /data-key="([^"]+)"/g;
+    let match;
+    
+    while ((match = dataKeyPattern.exec(html)) !== null) {
+        const key = match[1];
+        const namePattern = new RegExp(`data-key="${key}"[^>]*data-filename="([^"]+)"`);
+        const nameMatch = html.match(namePattern);
+        
+        if (nameMatch && nameMatch[1]) {
+            files.push({
+                name: nameMatch[1],
+                url: `https://www.mediafire.com/file/${key}`,
+                key: key
+            });
+        }
+    }
+    
+    // PATRÓN 3: Buscar en la estructura de datos JSON (oPageData)
+    const jsonPattern = /window\.oPageData\s*=\s*({[^;]+});/;
+    const jsonMatch = html.match(jsonPattern);
+    
+    if (jsonMatch) {
+        try {
+            const pageData = JSON.parse(jsonMatch[1]);
+            if (pageData.files) {
+                pageData.files.forEach(file => {
+                    if (file.quickkey || file.key) {
+                        files.push({
+                            name: file.name || file.filename,
+                            url: `https://www.mediafire.com/file/${file.quickkey || file.key}`,
+                            key: file.quickkey || file.key
+                        });
+                    }
+                });
+            }
+        } catch (e) {
+            console.log('No se pudo parsear JSON de página');
+        }
+    }
+    
+    // Eliminar duplicados por key
+    const uniqueFiles = [];
+    const seenKeys = new Set();
+    
+    for (const file of files) {
+        if (file.key && !seenKeys.has(file.key)) {
+            seenKeys.add(file.key);
+            uniqueFiles.push(file);
+        }
+    }
+    return uniqueFiles;
+}
+
+async function getFolderViaExternalService(folderKey) {
+    // Usamos fetchWithTimeout para el servicio externo.
+    try {
+        const serviceUrl = `https://r.jina.ai/https://www.mediafire.com/folder/${folderKey}`;
+        const response = await fetchWithTimeout(serviceUrl, { timeout: 15000 }); // Usamos timeout aquí
+        
+        if (response.ok) {
+            const content = await response.text();
+            
+            // Buscar patrones en el contenido procesado 
+            const files = [];
+            const keyPattern = /([a-zA-Z0-9]{13,15})/g;
+            let match;
+            
+            while ((match = keyPattern.exec(content)) !== null) {
+                const key = match[1];
+                if (key.length >= 13 && key.length <= 15) {
+                    const start = Math.max(0, match.index - 100);
+                    const end = Math.min(content.length, match.index + 100);
+                    const context = content.substring(start, end);
+                    
+                    const nameMatch = context.match(/([^\/\s]+\.\w{2,4})/);
+                    const fileName = nameMatch ? nameMatch[1] : `file_${key}`;
+                    
+                    files.push({
+                        name: fileName,
+                        url: `https://www.mediafire.com/file/${key}`,
+                        key: key
+                    });
+                }
+            }
+            
+            const uniqueFiles = [];
+            const seenKeys = new Set();
+            for (const file of files) {
+                if (file.key && !seenKeys.has(file.key)) {
+                    seenKeys.add(file.key);
+                    uniqueFiles.push(file);
+                }
+            }
+            return uniqueFiles;
+        }
+    } catch (error) {
+        console.error('Error servicio externo:', error);
+    }
+    return [];
+}
 
 async function downloadMultipleFiles(files, buttonElement) {
     const total = files.length;
@@ -175,12 +334,13 @@ async function downloadMultipleFiles(files, buttonElement) {
     
     updateButtonStatus(`📁 Iniciando descarga de ${total} archivos (0/${total})...`);
     
+    // Descarga secuencial de archivos
     for (let file of files) {
         try {
             const actionText = isMobileDevice ? 'Abriendo link directo' : 'Descargando';
             updateButtonStatus(`📁 ${actionText} (${downloaded + 1}/${total}): ${file.name}`);
 
-            // EL PROXY SE EJECUTA AQUÍ (ROBUSTEZ CON TIMEOUT DE 15s)
+            // EL PROXY SE EJECUTA AQUÍ
             const directUrl = await method2_externalServices(file.url);
             
             if (directUrl) {
@@ -197,6 +357,7 @@ async function downloadMultipleFiles(files, buttonElement) {
     updateButtonStatus(`✅ ${downloaded}/${total} archivos descargados`);
     
     if (downloaded === 0 && total > 0) {
+        // Fallback si no se pudo descargar nada
         openCleanPopup(files[0].url);
     }
 }
@@ -219,7 +380,7 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
     updateButtonStatus('Procesando...');
 
     if (mediafireUrl.includes('/folder/')) {
-        // Lógica de Carpeta (se mantiene la llamada a downloadMultipleFiles)
+        // Lógica de Carpeta
         try {
             updateButtonStatus('🔍 Buscando archivos en carpeta...');
             
@@ -230,9 +391,7 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
                 return;
             }
             
-            // Nota: getFolderContents debe ser restaurada desde tu código anterior
-            // para que esto funcione correctamente.
-            const files = await getFolderContents(folderKey); 
+            const files = await getFolderContents(folderKey);
             
             if (files && files.length > 0) {
                 await downloadMultipleFiles(files, buttonElement);
@@ -256,7 +415,7 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
                 triggerDownload(linkCache.get(mediafireUrl));
             } else {
                 updateButtonStatus('Obteniendo enlace directo...');
-                // LLAMADA AL PROXY CON TIMEOUT AUMENTADO Y NUEVO PROXY
+                // LLAMADA AL PROXY CON TIMEOUT AUMENTADO
                 const directUrl = await method2_externalServices(mediafireUrl);
                 
                 if (directUrl) {
