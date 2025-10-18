@@ -4,11 +4,11 @@
 // 1. Descarga individual: Sin caché para funcionar siempre en móvil.
 // 2. Carpetas: Funciones completas restauradas y robustas con Timeout de 15s.
 //
-// NOTA DE SOLUCIÓN AL AVISO DE CHROME:
-// Se ha priorizado el uso de 'triggerDownload' y se ha ajustado el 'fallback'
-// para que el mensaje de "Abriendo link (FALLBACK)" sea más claro en la interfaz
-// antes de llamar a 'openCleanPopup', ya que el aviso del navegador es sobre
-// la apertura programática de pestañas después de una cadena de navegación sin interacción.
+// AJUSTE DE SOLUCIÓN AL AVISO DE CHROME (V3):
+// La función 'openCleanPopup' (el fallback a la nueva pestaña) ha sido
+// eliminada/reemplazada por una REDIRECCIÓN SIMPLE (window.location.href),
+// que es la mejor práctica para evitar el aviso de "navegación sin interacción"
+// después de una operación asíncrona.
 // =========================================================================
 
 const linkCache = new Map(); // Se mantiene la variable, pero se ignora para archivos individuales.
@@ -38,17 +38,14 @@ function triggerDownload(url) {
 }
 
 /**
- * Función de respaldo para abrir la URL en una nueva pestaña.
+ * Función de respaldo para abrir la URL, ahora usa una redirección
+ * en la pestaña actual para EVITAR el aviso de "navegación sin interacción"
+ * después de una llamada asíncrona (fetch/proxy).
  */
-function openCleanPopup(url) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a); 
+function fallbackOpenUrl(url) {
+    // Redireccionamos la pestaña actual. Si el usuario desea mantener la página,
+    // tendrá que abrir el enlace en una nueva pestaña manualmente.
+    window.location.href = url;
 }
 
 // --- Lógica de Extracción y Proxy Robusto ---
@@ -348,8 +345,8 @@ async function downloadMultipleFiles(files, buttonElement) {
     
     // Si ninguna descarga se inició, abrimos el link del primer archivo como fallback
     if (downloaded === 0 && total > 0) {
-        updateButtonStatus(`FALLBACK: Abriendo link de ${files[0].name}`);
-        openCleanPopup(files[0].url);
+        updateButtonStatus(`FALLBACK: Redirigiendo a ${files[0].name}`);
+        fallbackOpenUrl(files[0].url);
     }
 }
 
@@ -376,8 +373,8 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
             
             const folderKey = extractFolderKey(mediafireUrl);
             if (!folderKey) {
-                updateButtonStatus('URL de carpeta no válida, abriendo link...');
-                openCleanPopup(mediafireUrl); 
+                updateButtonStatus('URL de carpeta no válida, redirigiendo...');
+                fallbackOpenUrl(mediafireUrl); 
                 return;
             }
             
@@ -387,14 +384,14 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
                 await downloadMultipleFiles(files, buttonElement);
                 
             } else {
-                updateButtonStatus('Carpeta vacía o error, abriendo link...');
-                openCleanPopup(mediafireUrl);
+                updateButtonStatus('Carpeta vacía o error, redirigiendo...');
+                fallbackOpenUrl(mediafireUrl);
             }
             
         } catch (error) {
             console.error('Error en el manejo de carpeta:', error);
-            updateButtonStatus('Error, abriendo link...');
-            openCleanPopup(mediafireUrl);
+            updateButtonStatus('Error, redirigiendo...');
+            fallbackOpenUrl(mediafireUrl);
         }
         
     } else {
@@ -409,16 +406,13 @@ async function handleGameDownload(mediafireUrl, buttonElement) {
                 triggerDownload(directUrl);
                 updateButtonStatus('Descargando...');
             } else {
-                // Si el proxy FALLÓ, se ejecuta el fallback.
-                // AVISO DE CHROME: El 'openCleanPopup' aquí es el que puede generar el aviso.
-                // Se mantiene la función, pero se asegura que el mensaje del botón
-                // sea el último paso antes de abrir el enlace.
-                updateButtonStatus('FALLBACK: Abriendo link');
-                openCleanPopup(mediafireUrl); 
+                // Si el proxy FALLÓ, se ejecuta el fallback (Redirección).
+                updateButtonStatus('FALLBACK: Redirigiendo link...');
+                fallbackOpenUrl(mediafireUrl); 
             }
         } catch(e) {
-            updateButtonStatus('Error. Abriendo link...');
-            openCleanPopup(mediafireUrl);
+            updateButtonStatus('Error. Redirigiendo link...');
+            fallbackOpenUrl(mediafireUrl);
         }
     }
     
