@@ -9,15 +9,16 @@
   "icons": [
     {
       // 🚨 CORRECCIÓN CRÍTICA: Se añade /RetroStation/
-      "src": "/RetroStation/Icons/pwa-icon-192.png", 
+      "src": "Icons/pwa-icon-192.png", 
       "sizes": "192x192",
       "type": "image/png"
     },
     {
       // La versión 512 también debe ser corregida, aunque no dé error ahora.
-      "src": "/RetroStation/Icons/pwa-icon-512.png", 
+      "src": "Icons/pwa-icon-512.png", 
       "sizes": "512x512",
       "type": "image/png"
     }
   ]
 }
+
