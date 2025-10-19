@@ -1,32 +1,29 @@
-const CACHE_NAME = 'retrostation-cache-v5'; // 🚨 CAMBIO A: Nueva Versión
+const CACHE_NAME = 'retrostation-cache-v6'; // 🚨 CAMBIO CRÍTICO: Nueva Versión
 
-// 🚨 CRÍTICO: Reemplaza [NOMBRE_DEL_REPOSITORIO] por el nombre exacto de tu repositorio (ej: 'RetroStation').
-// Esto obliga al Service Worker a buscar los archivos en la ubicación correcta.
-const REPO_NAME = 'RetroStation'; 
-
+// 🚨 ESTRATEGIA: Rutas RELATIVAS SIMPLES. Se asume que el Service Worker
+// instalado en la raíz del repositorio puede resolver estas rutas como lo hace el HTML.
+// Se excluye 'index.html' para evitar la Condición de Carrera.
 const urlsToCache = [
-    // CRÍTICO: Excluimos la raíz (index.html) para evitar el conflicto de red inicial.
-    // Los demás archivos requieren el prefijo del repositorio.
-    `/${REPO_NAME}/main-menu.css`,
-    `/${REPO_NAME}/grid-menu.css`,
-    `/${REPO_NAME}/game-details.css`,
+    'main-menu.css',
+    'grid-menu.css',
+    'game-details.css',
     // Archivos JavaScript
-    `/${REPO_NAME}/Js/data.js`,
-    `/${REPO_NAME}/Js/utils.js`,
-    `/${REPO_NAME}/Js/game-data-loader.js`,
-    `/${REPO_NAME}/Js/main-modal-manager.js`,
-    `/${REPO_NAME}/Js/game-grid-nav.js`,
-    `/${REPO_NAME}/Js/mediafire-downloader.js`,
-    `/${REPO_NAME}/Js/game-details-logic.js`,
-    `/${REPO_NAME}/Js/ui-logic.js`,
+    'Js/data.js',
+    'Js/utils.js',
+    'Js/game-data-loader.js',
+    'Js/main-modal-manager.js',
+    'Js/game-grid-nav.js',
+    'Js/mediafire-downloader.js',
+    'Js/game-details-logic.js',
+    'Js/ui-logic.js',
     // Íconos e imágenes
-    `/${REPO_NAME}/Icons/back.svg`,
-    `/${REPO_NAME}/Icons/loading.svg`,
-    `/${REPO_NAME}/Icons/favicon.png`,
-    `/${REPO_NAME}/Icons/preview.jpg`,
+    'Icons/back.svg',
+    'Icons/loading.svg',
+    'Icons/favicon.png',
+    'Icons/preview.jpg',
     // Íconos PWA
-    `/${REPO_NAME}/Icons/pwa-icon-192.png`,
-    `/${REPO_NAME}/Icons/pwa-icon-512.png`,
+    'Icons/pwa-icon-192.png',
+    'Icons/pwa-icon-512.png',
 ];
 
 // Evento 1: Instalación (almacenar archivos estáticos en caché)
@@ -39,15 +36,14 @@ self.addEventListener('install', event => {
         return cache.addAll(urlsToCache);
       })
       .catch(err => {
-        // MUY IMPORTANTE: Este catch capturará el error "Request failed"
+        // MUY IMPORTANTE: El Service Worker se detiene si esto falla.
         console.error('Error CRÍTICO al cachear archivos. Revise cada ruta:', err);
         console.error('Lista de archivos que fallaron al intentar cachear:', urlsToCache);
       })
   );
 });
 
-// [El código de activate y fetch (Eventos 2 y 3) sigue igual...]
-
+// Evento 2: Activación (limpiar cachés viejos)
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
@@ -64,6 +60,7 @@ self.addEventListener('activate', event => {
   );
 });
 
+// Evento 3: Fetch (servir desde la caché o ir a la red)
 self.addEventListener('fetch', event => {
   if (!event.request.url.startsWith(self.location.origin)) {
     return;
@@ -86,6 +83,7 @@ self.addEventListener('fetch', event => {
 
             caches.open(CACHE_NAME)
               .then(function(cache) {
+                // Esto cachea el index.html y otros archivos en la primera visita exitosa
                 cache.put(event.request, responseToCache);
               });
 
