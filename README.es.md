@@ -8,7 +8,7 @@
 
 RetroStation es una **aplicación web** diseñada para ser tu centro personal de juegos retro. Ofrece una **interfaz navegable** sencilla y funcional que te permite explorar una vasta colección de títulos clásicos de consolas icónicas y, lo mejor de todo, descargar directamente sus archivos para que puedas jugarlos en tu emulador favorito.
 
---
+---
 
 ## ✨ Características principales
 
