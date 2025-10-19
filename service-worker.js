@@ -1,29 +1,29 @@
-const CACHE_NAME = 'retrostation-cache-v3'; // 🚨 CAMBIO A: Nueva Versión
+const CACHE_NAME = 'retrostation-cache-v4'; // 🚨 CAMBIO A: Nueva Versión
 
 // Lista de todos los archivos estáticos de tu aplicación para caché inicial
-// CRÍTICO: Se excluye el "./" o "index.html" para evitar el conflicto de red en la primera carga.
+// 🛠️ CRÍTICO: Se añade './' a TODAS las rutas para forzar resolución correcta 
+// en el subdirectorio de GitHub Pages. Se excluye 'index.html' para evitar la Condición de Carrera.
 const urlsToCache = [
-    // La raíz ('./' o 'index.html') se cacheará en el evento 'fetch'.
-    'main-menu.css',
-    'grid-menu.css',
-    'game-details.css',
+    './main-menu.css',
+    './grid-menu.css',
+    './game-details.css',
     // Archivos JavaScript
-    'Js/data.js',
-    'Js/utils.js',
-    'Js/game-data-loader.js',
-    'Js/main-modal-manager.js',
-    'Js/game-grid-nav.js',
-    'Js/mediafire-downloader.js',
-    'Js/game-details-logic.js',
-    'Js/ui-logic.js',
+    './Js/data.js',
+    './Js/utils.js',
+    './Js/game-data-loader.js',
+    './Js/main-modal-manager.js',
+    './Js/game-grid-nav.js',
+    './Js/mediafire-downloader.js',
+    './Js/game-details-logic.js',
+    './Js/ui-logic.js',
     // Íconos e imágenes
-    'Icons/back.svg',
-    'Icons/loading.svg',
-    'Icons/favicon.png',
-    'Icons/preview.jpg',
+    './Icons/back.svg',
+    './Icons/loading.svg',
+    './Icons/favicon.png',
+    './Icons/preview.jpg',
     // Íconos PWA
-    'Icons/pwa-icon-192.png',
-    'Icons/pwa-icon-512.png',
+    './Icons/pwa-icon-192.png',
+    './Icons/pwa-icon-512.png',
 ];
 
 // Evento 1: Instalación (almacenar archivos estáticos en caché)
@@ -36,6 +36,7 @@ self.addEventListener('install', event => {
         return cache.addAll(urlsToCache);
       })
       .catch(err => {
+        // MUY IMPORTANTE: Este catch capturará el error "Request failed"
         console.error('Error CRÍTICO al cachear archivos. Revise cada ruta:', err);
         console.error('Lista de archivos que fallaron al intentar cachear:', urlsToCache);
       })
@@ -75,7 +76,7 @@ self.addEventListener('fetch', event => {
           return response;
         }
         
-        // 🚨 CRÍTICO: Si no está en caché, va a la red. Si es el 'index.html' o '/', 
+        // Si no está en caché, va a la red. Si es el 'index.html' o '/', 
         // lo cachea aquí para las próximas visitas.
         return fetch(event.request).then(
           function(response) {
@@ -89,7 +90,7 @@ self.addEventListener('fetch', event => {
 
             caches.open(CACHE_NAME)
               .then(function(cache) {
-                // Aquí se cachea el index.html/./ en la primera visita exitosa
+                // Esto cachea el index.html y otros archivos en la primera visita exitosa
                 cache.put(event.request, responseToCache);
               });
 
