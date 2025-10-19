@@ -10,6 +10,10 @@
 // ⚡ OPTIMIZACIÓN DE RENDIMIENTO: Uso de requestAnimationFrame para handleResize (existente).
 //
 // 🎯 MEJORA: Refactorización de la lógica de rotación en handleClick.
+//
+// 🧱 OPTIMIZACIÓN DE INYECCIÓN DE DOM: Eliminación del chunking con rAF en
+// generarOpcionesOptimizada para inyectar todo el DocumentFragment de una vez
+// después de la decodificación de la imagen, acelerando la renderización inicial.
 // =========================================================================
 
 // --- 0. Configuraciones Comunes (Mejorar Cohesión) ---
@@ -90,54 +94,69 @@ class RuedaDinamica {
     }
 
     // =========================================================================
-    // Generación y Lógica de Animación
-    // =========================================================================
+// Generación y Lógica de Animación
+// =========================================================================
 
-    /**
-     * Crea las opciones del menú de forma asíncrona usando rAF. (Sin cambios)
-     */
-    generarOpcionesOptimizada(onComplete) {
-        let index = 0;
-        const totalItems = this.menuItems.length;
+/**
+ * Crea las opciones del menú de forma asíncrona usando rAF y Promise.all para decodificar las imágenes.
+ * Esto asegura que los SVGs estén listos para ser renderizados antes de la inyección al DOM, 
+ * previniendo la carga de imágenes bloqueantes y mejorando el jank (saltos visuales).
+ * @param {function} onComplete - Función a ejecutar al finalizar la creación y decodificación.
+ */
+generarOpcionesOptimizada(onComplete) {
+    // 1. Fase de Creación de Elementos e Inicio de Decodificación (Síncrono)
+    const totalItems = this.menuItems.length;
+    const decodePromises = [];
+    const fragment = document.createDocumentFragment();
 
-        const processChunk = () => {
-            const itemsPerFrame = 1; // Mantenemos 1 por rAF para asegurar un DOM fluido
-            let itemsProcessed = 0;
+    for (let index = 0; index < totalItems; index++) {
+        const baseName = this.menuItems[index];
+        const opcion = document.createElement('div');
+        opcion.classList.add('opcion');
+        opcion.setAttribute('title', baseName.toUpperCase());
+        opcion.dataset.index = index;
 
-            const fragment = document.createDocumentFragment();
+        const img = document.createElement('img');
+        img.src = this.config.imageDirectory + baseName + this.config.imageExtension;
+        img.alt = baseName;
+        img.title = baseName;
 
-            while (index < totalItems && itemsProcessed < itemsPerFrame) {
-                const baseName = this.menuItems[index];
-                const opcion = document.createElement('div');
-                opcion.classList.add('opcion');
-                opcion.setAttribute('title', baseName.toUpperCase());
-                opcion.dataset.index = index;
+        // Iniciar la decodificación asíncrona (si está disponible)
+        if (typeof img.decode === 'function') {
+            // Capturar el error para que Promise.all no falle si una imagen no se puede decodificar
+            decodePromises.push(img.decode().catch(e => {
+                console.warn(`[WARN] Falló la decodificación asíncrona de SVG: ${baseName}.svg`, e);
+            }));
+        }
+        
+        opcion.appendChild(img);
+        this.opciones.push(opcion); // Se almacenan las opciones creadas.
+        fragment.appendChild(opcion); // Se añaden al fragmento.
+    }
 
-                const img = document.createElement('img');
-                img.src = this.config.imageDirectory + baseName + this.config.imageExtension;
-                img.alt = baseName;
-                img.title = baseName;
-
-                opcion.appendChild(img);
-                fragment.appendChild(opcion);
-                this.opciones.push(opcion);
-
-                index++;
-                itemsProcessed++;
-            }
+    // 2. Esperar a que todas las imágenes se decodifiquen asíncronamente
+    Promise.all(decodePromises)
+        .then(() => {
+            console.log("[RuedaDinamica] Decodificación asíncrona de todos los SVGs finalizada.");
             
-            this.rueda.appendChild(fragment);
-
-            if (index < totalItems) {
-                requestAnimationFrame(processChunk);
-            } else {
+            // 3. Fase de Inyección de DOM (Optimización: Inyectar el fragmento completo con rAF)
+            requestAnimationFrame(() => {
+                this.rueda.appendChild(fragment); // Inyección única
                 console.log("[RuedaDinamica] Creación de opciones finalizada y optimizada con rAF.");
                 if (onComplete) onComplete();
-            }
-        };
+            });
 
-        requestAnimationFrame(processChunk);
-    }
+        })
+        .catch(error => {
+            console.error("[ERROR] Fallo inesperado en Promise.all al decodificar SVGs:", error);
+            // Si Promise.all falla, procedemos con la inyección de todos modos.
+            requestAnimationFrame(() => {
+                this.rueda.appendChild(fragment); 
+                console.log("[RuedaDinamica] Creación de opciones finalizada después de un error de decodificación.");
+                if (onComplete) onComplete();
+            });
+        });
+}
 
     /**
      * Centraliza la gestión de will-change en la rueda y sus opciones. (Sin cambios)
