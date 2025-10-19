@@ -1,11 +1,9 @@
-// service-worker.js
-
-// 🚨 CAMBIO A: Incremento de Versión (Para forzar la actualización)
-const CACHE_NAME = 'retrostation-cache-v2';
+const CACHE_NAME = 'retrostation-cache-v3'; // 🚨 CAMBIO A: Nueva Versión
 
 // Lista de todos los archivos estáticos de tu aplicación para caché inicial
+// CRÍTICO: Se excluye el "./" o "index.html" para evitar el conflicto de red en la primera carga.
 const urlsToCache = [
-    './', // 🚨 CRÍTICO: Se cambió 'index.html' a './' para la ruta raíz y la Condición de Carrera
+    // La raíz ('./' o 'index.html') se cacheará en el evento 'fetch'.
     'main-menu.css',
     'grid-menu.css',
     'game-details.css',
@@ -34,7 +32,7 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Service Worker: Cache Abierta');
-        // Agrega todos los archivos a la caché
+        // Agrega todos los archivos restantes a la caché
         return cache.addAll(urlsToCache);
       })
       .catch(err => {
@@ -64,7 +62,7 @@ self.addEventListener('activate', event => {
 
 // Evento 3: Fetch (servir desde la caché o ir a la red)
 self.addEventListener('fetch', event => {
-  // Ignora las solicitudes externas (como mediafire) y sólo cachéa los assets locales
+  // Ignora las solicitudes externas (como mediafire)
   if (!event.request.url.startsWith(self.location.origin)) {
     return;
   }
@@ -76,8 +74,28 @@ self.addEventListener('fetch', event => {
         if (response) {
           return response;
         }
-        // De lo contrario, solicita el recurso a la red
-        return fetch(event.request);
+        
+        // 🚨 CRÍTICO: Si no está en caché, va a la red. Si es el 'index.html' o '/', 
+        // lo cachea aquí para las próximas visitas.
+        return fetch(event.request).then(
+          function(response) {
+            // Verifica que la respuesta sea válida
+            if(!response || response.status !== 200 || response.type !== 'basic') {
+              return response;
+            }
+            
+            // Si es un recurso local que queremos cachear, lo clonamos.
+            var responseToCache = response.clone();
+
+            caches.open(CACHE_NAME)
+              .then(function(cache) {
+                // Aquí se cachea el index.html/./ en la primera visita exitosa
+                cache.put(event.request, responseToCache);
+              });
+
+            return response;
+          }
+        );
       }
     )
   );
