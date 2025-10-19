@@ -1,22 +1,11 @@
 // =========================================================================
 // ui-logic.js: Rueda Dinámica, Animación y Navegación Principal
 //
-// 🔧 OPTIMIZACIÓN: Refactorización de la lógica de redimensionamiento y
-// gestión de estado para reducir re-cálculos costosos.
+// 🔧 SOLUCIÓN DE BUG: Inyección de DOM y lógica de inicialización para asegurar 
+//                     que todos los SVGs tengan los estilos CSS correctos desde el inicio.
 //
-// 🚀 OPTIMIZACIÓN MÁXIMA: Lógica de animación completamente delegada a CSS.
-//
-// 🌟 OPTIMIZACIÓN DE FONDO: Uso de precarga/decodificación asíncrona (existente).
-// ⚡ OPTIMIZACIÓN DE RENDIMIENTO: Uso de requestAnimationFrame para handleResize (existente).
-//
-// 🎯 MEJORA: Refactorización de la lógica de rotación en handleClick.
-//
-// 🧱 OPTIMIZACIÓN DE INYECCIÓN DE DOM: Eliminación del chunking con rAF en
-// generarOpcionesOptimizada para inyectar todo el DocumentFragment de una vez
-// después de la decodificación de la imagen, acelerando la renderización inicial.
-//
-// 🚫 CRÍTICO ANTI-LAG: Uso estricto de Promise.all para la DECODIFICACIÓN de
-// SVGs inicial, aplazando la inyección al DOM hasta que la CPU esté libre.
+// 🚀 OPTIMIZACIÓN MÁXIMA ANTI-FRENADA: Uso de img.decode() con Promise.all 
+//                                     y requestIdleCallback para decodificación asíncrona.
 // =========================================================================
 
 // --- 0. Configuraciones Comunes (Mejorar Cohesión) ---
@@ -57,8 +46,8 @@ class RuedaDinamica {
 
         // Datos y Configuración
         this.menuItems = menuItems;
-        this.config = config;
         this.opciones = [];
+        this.config = config;
         this.totalOpciones = menuItems.length;
         this.anguloPorOpcion = 360 / this.totalOpciones;
         this.halfOptions = this.totalOpciones / 2;
@@ -71,8 +60,6 @@ class RuedaDinamica {
         this.capaFondoActual = null;
         this.isMobileView = false; 
         this.isScrolling = false;
-        // Se mantiene para el bloqueo de click durante la transición si se desea, pero 
-        // la animación es tan rápida con CSS que puede ser innecesario. Lo simplificamos.
         this.isRotatingFromClick = false; 
         this.opcionSeleccionadaAnterior = null;
         this.resizeRafId = null; 
@@ -88,84 +75,84 @@ class RuedaDinamica {
 
         // Inicialización y Eventos (La generación ahora es asíncrona)
         this.generarOpcionesOptimizada(() => {
-            // Callback: Asegura que this.opciones esté poblado para calcular los ángulos
-            // La rotación inicial de cada ítem (index * anguloPorOpcion)
+            // Callback: Ejecutar la lógica de inicialización SOLO después de la inyección
             this.initialAngles = Array.from(this.opciones).map((op, index) => index * this.anguloPorOpcion);
             this.attachEventListeners();
+            
+            // Forzar el re-chequeo del estado móvil ANTES de la vista inicial
+            this.isMobileView = this.checkMobileView(); 
             this.initializeView(true);
         });
     }
 
     // =========================================================================
-// Generación y Lógica de Animación
-// =========================================================================
-
-/**
- * Crea las opciones del menú de forma asíncrona usando rAF y Promise.all para decodificar las imágenes.
- * Esto asegura que los SVGs estén listos para ser renderizados antes de la inyección al DOM, 
- * previniendo la carga de imágenes bloqueantes y mejorando el jank (saltos visuales).
- * @param {function} onComplete - Función a ejecutar al finalizar la creación y decodificación.
- */
-generarOpcionesOptimizada(onComplete) {
-    // 1. Fase de Creación de Elementos e Inicio de Decodificación (Síncrono)
-    const totalItems = this.menuItems.length;
-    const decodePromises = [];
-    const fragment = document.createDocumentFragment();
-
-    for (let index = 0; index < totalItems; index++) {
-        const baseName = this.menuItems[index];
-        const opcion = document.createElement('div');
-        opcion.classList.add('opcion');
-        opcion.setAttribute('title', baseName.toUpperCase());
-        opcion.dataset.index = index;
-
-        const img = document.createElement('img');
-        img.src = this.config.imageDirectory + baseName + this.config.imageExtension;
-        img.alt = baseName;
-        img.title = baseName;
-
-        // Iniciar la decodificación asíncrona (si está disponible)
-        if (typeof img.decode === 'function') {
-            // Se usa .catch para que Promise.all no falle si una imagen no se puede decodificar,
-            // manteniendo el resto de la interfaz fluida.
-            decodePromises.push(img.decode().catch(e => {
-                console.warn(`[WARN] Falló la decodificación asíncrona de SVG: ${baseName}.svg. Continuando.`, e);
-            }));
-        }
-        
-        opcion.appendChild(img);
-        this.opciones.push(opcion); // Se almacenan las opciones creadas.
-        fragment.appendChild(opcion); // Se añaden al fragmento.
-    }
-
-    // 2. Esperar a que todas las imágenes se decodifiquen asíncronamente
-    // Aunque fallen algunas decodificaciones, Promise.all continuará gracias a .catch.
-    Promise.all(decodePromises)
-        .then(() => {
-            console.log("[RuedaDinamica] Decodificación asíncrona de todos los SVGs finalizada (o fallos manejados).");
-            
-            // 3. Fase de Inyección de DOM (Optimización: Inyectar el fragmento completo con rAF)
-            requestAnimationFrame(() => {
-                this.rueda.appendChild(fragment); // Inyección única
-                console.log("[RuedaDinamica] Creación de opciones finalizada y optimizada con rAF.");
-                if (onComplete) onComplete();
-            });
-
-        })
-        .catch(error => {
-            // Este catch solo se activaría por un error crítico de Promise.all, no de la decodificación individual.
-            console.error("[ERROR] Fallo inesperado en Promise.all al decodificar SVGs:", error);
-            // Si Promise.all falla críticamente, procedemos con la inyección de todos modos.
-            requestAnimationFrame(() => {
-                this.rueda.appendChild(fragment); 
-                console.log("[RuedaDinamica] Creación de opciones finalizada después de un error crítico.");
-                if (onComplete) onComplete();
-            });
-        });
-}
+    // Generación y Lógica de Animación
+    // =========================================================================
 
     /**
-     * Centraliza la gestión de will-change en la rueda y sus opciones. (Sin cambios)
+     * Crea las opciones del menú de forma asíncrona usando rAF y Promise.all para decodificar las imágenes.
+     * Esto asegura que los SVGs estén listos para ser renderizados antes de la inyección al DOM, 
+     * previniendo la carga de imágenes bloqueantes y mejorando el jank (saltos visuales).
+     * @param {function} onComplete - Función a ejecutar al finalizar la creación y decodificación.
+     */
+    generarOpcionesOptimizada(onComplete) {
+        // 1. Fase de Creación de Elementos e Inicio de Decodificación (Síncrono)
+        const totalItems = this.menuItems.length;
+        const decodePromises = [];
+        const fragment = document.createDocumentFragment();
+
+        for (let index = 0; index < totalItems; index++) {
+            const baseName = this.menuItems[index];
+            const opcion = document.createElement('div');
+            opcion.classList.add('opcion');
+            opcion.setAttribute('title', baseName.toUpperCase());
+            opcion.dataset.index = index;
+
+            const img = document.createElement('img');
+            img.src = this.config.imageDirectory + baseName + this.config.imageExtension;
+            img.alt = baseName;
+            img.title = baseName;
+
+            // Iniciar la decodificación asíncrona (si está disponible)
+            if (typeof img.decode === 'function') {
+                // Se usa .catch para que Promise.all no falle si una imagen no se puede decodificar,
+                // manteniendo el resto de la interfaz fluida.
+                decodePromises.push(img.decode().catch(e => {
+                    console.warn(`[WARN] Falló la decodificación asíncrona de SVG: ${baseName}.svg. Continuando.`, e);
+                }));
+            }
+            
+            opcion.appendChild(img);
+            this.opciones.push(opcion); // Se almacenan las opciones creadas.
+            fragment.appendChild(opcion); // Se añaden al fragmento.
+        }
+
+        // 2. Esperar a que todas las imágenes se decodifiquen asíncronamente
+        Promise.all(decodePromises)
+            .then(() => {
+                console.log("[RuedaDinamica] Decodificación asíncrona de todos los SVGs finalizada (o fallos manejados).");
+                
+                // 3. Fase de Inyección de DOM (Optimización: Inyectar el fragmento completo con rAF)
+                requestAnimationFrame(() => {
+                    this.rueda.appendChild(fragment); // Inyección única
+                    console.log("[RuedaDinamica] Creación de opciones finalizada y optimizada con rAF.");
+                    if (onComplete) onComplete();
+                });
+
+            })
+            .catch(error => {
+                console.error("[ERROR] Fallo inesperado en Promise.all al decodificar SVGs:", error);
+                // Si Promise.all falla críticamente, procedemos con la inyección de todos modos.
+                requestAnimationFrame(() => {
+                    this.rueda.appendChild(fragment); 
+                    console.log("[RuedaDinamica] Creación de opciones finalizada después de un error crítico.");
+                    if (onComplete) onComplete();
+                });
+            });
+    }
+
+    /**
+     * Centraliza la gestión de will-change en la rueda y sus opciones. 
      */
     setWillChangeState(activate) {
         const state = activate ? 'transform' : 'auto';
@@ -296,7 +283,7 @@ generarOpcionesOptimizada(onComplete) {
     }
 
     /**
-     * Gestiona la transición de fondos evitando la acumulación de capas. (Sin cambios significativos)
+     * Gestiona la transición de fondos evitando la acumulación de capas.
      */
     actualizarFondo() {
         const baseName = this.menuItems[this.indiceActual];
@@ -502,8 +489,6 @@ generarOpcionesOptimizada(onComplete) {
     /**
      * @private
      * Lógica centralizada para la actualización de dimensiones y el estado de la vista.
-     * OPTIMIZACIÓN: Añade `oldIsMobileView` a `_handleDimensionUpdateAndResizeLogic` 
-     * para pasar la responsabilidad de chequear el cambio de estado móvil a `handleResize`.
      */
     _handleDimensionUpdateAndResizeLogic(initialLoad = false, oldIsMobileView = this.isMobileView) {
         const newIsMobileView = this.checkMobileView(); 
@@ -528,16 +513,13 @@ generarOpcionesOptimizada(onComplete) {
             this.updateViewState();
         }
 
-        // 3. Lógica de re-selección del grid (si aplica) - Movido a una función si fuera más complejo
+        // 3. Lógica de re-selección del grid (si aplica) 
         if (this.hayModalAbierto() && typeof this.callbacks.updateGridSelection === 'function') {
             const gridIndex = window.currentGridIndex ?? 0;
-            // Se asume que los últimos 3 booleanos controlan la lógica de re-render/scroll
-            // Nota: Aquí se está forzando un recálculo/reposicionamiento del grid
             this.callbacks.updateGridSelection(gridIndex, true, true, true); 
         }
 
         // 4. Asegurar que la selección actual se aplique y el scroll/posición se realice
-        // Esto es esencial si solo se cambia el tamaño de la ventana (no el breakpoint)
         this.actualizarSeleccion(newIsMobileView); 
     }
 
@@ -575,8 +557,7 @@ generarOpcionesOptimizada(onComplete) {
     
     // Función pública de inicialización
     initializeView(initialLoad = false) {
-        // Pre-chequeo del estado para el 'initialLoad'
-        this.checkMobileView(); 
+        // Asegurar que el estado inicial se aplique correctamente
         this.setWillChangeState(!this.isMobileView); 
 
         // Pasar el estado actual como "anterior" para el initialLoad
