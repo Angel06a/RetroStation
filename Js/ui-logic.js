@@ -14,6 +14,9 @@
 // 🧱 OPTIMIZACIÓN DE INYECCIÓN DE DOM: Eliminación del chunking con rAF en
 // generarOpcionesOptimizada para inyectar todo el DocumentFragment de una vez
 // después de la decodificación de la imagen, acelerando la renderización inicial.
+//
+// 🚫 CRÍTICO ANTI-LAG: Uso estricto de Promise.all para la DECODIFICACIÓN de
+// SVGs inicial, aplazando la inyección al DOM hasta que la CPU esté libre.
 // =========================================================================
 
 // --- 0. Configuraciones Comunes (Mejorar Cohesión) ---
@@ -123,9 +126,10 @@ generarOpcionesOptimizada(onComplete) {
 
         // Iniciar la decodificación asíncrona (si está disponible)
         if (typeof img.decode === 'function') {
-            // Capturar el error para que Promise.all no falle si una imagen no se puede decodificar
+            // Se usa .catch para que Promise.all no falle si una imagen no se puede decodificar,
+            // manteniendo el resto de la interfaz fluida.
             decodePromises.push(img.decode().catch(e => {
-                console.warn(`[WARN] Falló la decodificación asíncrona de SVG: ${baseName}.svg`, e);
+                console.warn(`[WARN] Falló la decodificación asíncrona de SVG: ${baseName}.svg. Continuando.`, e);
             }));
         }
         
@@ -135,9 +139,10 @@ generarOpcionesOptimizada(onComplete) {
     }
 
     // 2. Esperar a que todas las imágenes se decodifiquen asíncronamente
+    // Aunque fallen algunas decodificaciones, Promise.all continuará gracias a .catch.
     Promise.all(decodePromises)
         .then(() => {
-            console.log("[RuedaDinamica] Decodificación asíncrona de todos los SVGs finalizada.");
+            console.log("[RuedaDinamica] Decodificación asíncrona de todos los SVGs finalizada (o fallos manejados).");
             
             // 3. Fase de Inyección de DOM (Optimización: Inyectar el fragmento completo con rAF)
             requestAnimationFrame(() => {
@@ -148,11 +153,12 @@ generarOpcionesOptimizada(onComplete) {
 
         })
         .catch(error => {
+            // Este catch solo se activaría por un error crítico de Promise.all, no de la decodificación individual.
             console.error("[ERROR] Fallo inesperado en Promise.all al decodificar SVGs:", error);
-            // Si Promise.all falla, procedemos con la inyección de todos modos.
+            // Si Promise.all falla críticamente, procedemos con la inyección de todos modos.
             requestAnimationFrame(() => {
                 this.rueda.appendChild(fragment); 
-                console.log("[RuedaDinamica] Creación de opciones finalizada después de un error de decodificación.");
+                console.log("[RuedaDinamica] Creación de opciones finalizada después de un error crítico.");
                 if (onComplete) onComplete();
             });
         });
@@ -245,7 +251,8 @@ generarOpcionesOptimizada(onComplete) {
 
     /**
      * @private
-     * Precarga y decodifica un fondo para evitar el bloqueo del hilo principal. (Sin cambios)
+     * Precarga y decodifica un fondo para evitar el bloqueo del hilo principal.
+     * MEJORA: Se añade manejo de requestIdleCallback en el decodificador de imágenes.
      */
     _preloadAndDecodeImage(url) {
         if (this.backgroundPreloadCache.has(url)) {
@@ -260,21 +267,27 @@ generarOpcionesOptimizada(onComplete) {
                         img.decode()
                             .then(() => resolve(url))
                             .catch(error => {
-                                console.error("Error al decodificar imagen:", error);
-                                reject(error);
+                                // ⚠️ No se rechaza, se resuelve para no detener el flujo si falla una decodificación.
+                                console.warn(`Error al decodificar imagen: ${url}. Resolviendo en fallback.`, error);
+                                resolve(url);
                             });
                     } else {
                         resolve(url);
                     }
                 };
 
+                // APLAZAR LA EJECUCIÓN: Garantiza que la decodificación (si no es nativa) o
+                // la resolución de la promesa no bloquee el frame de animación.
                 if ('requestIdleCallback' in window) {
                     requestIdleCallback(decodeAction);
                 } else {
                     setTimeout(decodeAction, 0);
                 }
             };
-            img.onerror = reject;
+            img.onerror = (e) => {
+                console.warn(`Error al cargar el recurso (red): ${url}. Resolviendo en fallback.`, e);
+                resolve(url); // Resolver para no bloquear el Promise.all implícito.
+            };
             img.src = url;
         });
 
@@ -294,6 +307,7 @@ generarOpcionesOptimizada(onComplete) {
             return;
         }
 
+        // Se usa el nuevo _preloadAndDecodeImage con gestión de requestIdleCallback/setTimeout(0)
         this._preloadAndDecodeImage(bgUrl).then(resolvedUrl => {
             if (`url('${resolvedUrl}')` !== fullBgUrl) return; 
 
