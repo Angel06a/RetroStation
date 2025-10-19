@@ -5,6 +5,8 @@
 // lógica de rotación para reducir la duplicación.
 //
 // 🚀 OPTIMIZACIÓN MÁXIMA: Lógica completamente delegada a CSS (Rotación y Horizontalidad)
+//
+// 🌟 OPTIMIZACIÓN DE FONDO: Precarga y decodificación asíncrona para evitar micro-lags
 // =========================================================================
 
 // --- 0. Configuraciones Comunes (Mejorar Cohesión) ---
@@ -66,6 +68,8 @@ class RuedaDinamica {
         // Variables para Optimización de Fondo (Acumulación)
         this.pendingBackgroundRemoval = null; 
         this.backgroundRemovalTimeoutId = null; 
+        this.backgroundPreloadCache = new Map(); // Nueva caché para fondos precargados
+        this.currentBackgroundUrl = null; // Para verificar el fondo actual
 
         // Referencia a la variable CSS de rotación
         this.ruedaRotacionCSSVar = '--rueda-rotacion-actual'; 
@@ -210,7 +214,56 @@ class RuedaDinamica {
     }
 
     /**
+     * @private
+     * Precarga y decodifica un fondo para evitar el bloqueo del hilo principal.
+     * @param {string} url - La URL de la imagen de fondo.
+     * @returns {Promise<string>} Una promesa que se resuelve con la URL si la decodificación es exitosa.
+     */
+    _preloadAndDecodeImage(url) {
+        // Devuelve la promesa de la caché si ya existe
+        if (this.backgroundPreloadCache.has(url)) {
+            return this.backgroundPreloadCache.get(url);
+        }
+
+        const promise = new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                // Usamos requestIdleCallback o setTimeout para la decodificación
+                // para que ocurra durante un momento inactivo.
+                const decodeAction = () => {
+                    if ('decode' in img) {
+                        // Decodificación asíncrona para navegadores modernos
+                        img.decode()
+                            .then(() => resolve(url))
+                            .catch(error => {
+                                console.error("Error al decodificar imagen:", error);
+                                reject(error);
+                            });
+                    } else {
+                        // Fallback: Resuelve inmediatamente si decode no está soportado
+                        resolve(url);
+                    }
+                };
+
+                // Priorizar requestIdleCallback si está disponible, sino usar setTimeout
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(decodeAction);
+                } else {
+                    setTimeout(decodeAction, 0);
+                }
+            };
+            img.onerror = reject;
+            img.src = url;
+        });
+
+        // Almacena la promesa en caché para futuras peticiones
+        this.backgroundPreloadCache.set(url, promise);
+        return promise;
+    }
+
+    /**
      * Gestiona la transición de fondos evitando la acumulación de capas.
+     * Ahora utiliza precarga y decodificación asíncrona.
      */
     actualizarFondo() {
         const baseName = this.menuItems[this.indiceActual];
@@ -218,56 +271,66 @@ class RuedaDinamica {
         const fullBgUrl = `url('${bgUrl}')`;
 
         // Si la imagen ya es la actual, salimos
-        if (this.capaFondoActual && this.capaFondoActual.style.backgroundImage === fullBgUrl) {
+        if (this.currentBackgroundUrl === fullBgUrl) {
             return;
         }
 
-        // --- 1. CANCELACIÓN DE ELIMINACIÓN ANTERIOR (CLAVE para la optimización) ---
-        if (this.backgroundRemovalTimeoutId) {
-            clearTimeout(this.backgroundRemovalTimeoutId);
-            this.backgroundRemovalTimeoutId = null; 
-        }
+        this._preloadAndDecodeImage(bgUrl).then(resolvedUrl => {
+            // Si la selección ha cambiado mientras se precargaba, abortamos la aplicación.
+            if (`url('${resolvedUrl}')` !== fullBgUrl) return; 
 
-        if (this.pendingBackgroundRemoval && this.backgroundContainer.contains(this.pendingBackgroundRemoval)) {
-            this.pendingBackgroundRemoval.style.willChange = 'auto';
-            this.backgroundContainer.removeChild(this.pendingBackgroundRemoval);
-            this.pendingBackgroundRemoval = null;
-        }
-        
-        // Almacenamos la capa actual (que ahora será la anterior/a eliminar)
-        const capaAnterior = this.capaFondoActual;
-        
-        // --- 2. Crear y añadir la nueva capa ---
-        const nuevaCapa = document.createElement('div');
-        nuevaCapa.classList.add('background-layer');
-        nuevaCapa.style.backgroundImage = fullBgUrl;
-        nuevaCapa.style.willChange = 'opacity';
-        
-        this.backgroundContainer.appendChild(nuevaCapa);
-        this.capaFondoActual = nuevaCapa; // Establecer la nueva capa como la actual
+            this.currentBackgroundUrl = fullBgUrl;
 
-        // Forzar un repaint/reflow para que la transición funcione.
-        void nuevaCapa.offsetWidth; 
-        
-        // Establecer la nueva capa como visible (opacidad: 1)
-        nuevaCapa.style.opacity = '1';
+            // --- 1. CANCELACIÓN DE ELIMINACIÓN ANTERIOR (CLAVE para la optimización) ---
+            if (this.backgroundRemovalTimeoutId) {
+                clearTimeout(this.backgroundRemovalTimeoutId);
+                this.backgroundRemovalTimeoutId = null; 
+            }
 
-        // --- 3. Gestionar la capa anterior (desvanecer y programar eliminación) ---
-        if (capaAnterior) {
-            capaAnterior.style.opacity = '0';
-            this.pendingBackgroundRemoval = capaAnterior;
-
-            // Esperar a que termine la animación de opacidad antes de eliminar el elemento.
-            this.backgroundRemovalTimeoutId = setTimeout(() => {
-                if (this.backgroundContainer.contains(capaAnterior)) {
-                    capaAnterior.style.willChange = 'auto';
-                    this.backgroundContainer.removeChild(capaAnterior);
-                }
+            if (this.pendingBackgroundRemoval && this.backgroundContainer.contains(this.pendingBackgroundRemoval)) {
+                this.pendingBackgroundRemoval.style.willChange = 'auto';
+                this.backgroundContainer.removeChild(this.pendingBackgroundRemoval);
                 this.pendingBackgroundRemoval = null;
-                this.backgroundRemovalTimeoutId = null;
+            }
+            
+            // Almacenamos la capa actual (que ahora será la anterior/a eliminar)
+            const capaAnterior = this.capaFondoActual;
+            
+            // --- 2. Crear y añadir la nueva capa ---
+            const nuevaCapa = document.createElement('div');
+            nuevaCapa.classList.add('background-layer');
+            nuevaCapa.style.backgroundImage = fullBgUrl;
+            nuevaCapa.style.willChange = 'opacity';
+            
+            this.backgroundContainer.appendChild(nuevaCapa);
+            this.capaFondoActual = nuevaCapa; // Establecer la nueva capa como la actual
 
-            }, this.config.animacionDuracionFondo); 
-        }
+            // Forzar un repaint/reflow para que la transición funcione.
+            void nuevaCapa.offsetWidth; 
+            
+            // Establecer la nueva capa como visible (opacidad: 1)
+            nuevaCapa.style.opacity = '1';
+
+            // --- 3. Gestionar la capa anterior (desvanecer y programar eliminación) ---
+            if (capaAnterior) {
+                capaAnterior.style.opacity = '0';
+                this.pendingBackgroundRemoval = capaAnterior;
+
+                // Esperar a que termine la animación de opacidad antes de eliminar el elemento.
+                this.backgroundRemovalTimeoutId = setTimeout(() => {
+                    if (this.backgroundContainer.contains(capaAnterior)) {
+                        capaAnterior.style.willChange = 'auto';
+                        this.backgroundContainer.removeChild(capaAnterior);
+                    }
+                    this.pendingBackgroundRemoval = null;
+                    this.backgroundRemovalTimeoutId = null;
+
+                }, this.config.animacionDuracionFondo); 
+            }
+        }).catch(error => {
+            console.error("No se pudo precargar/decodificar el fondo:", error);
+            // Si falla la precarga/decodificación, se podría optar por un fallback o simplemente no actualizar
+        });
     }
 
     actualizarSeleccion(scroll = false) {
