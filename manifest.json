@@ -1,26 +1,21 @@
 {
-  "name": "RetroStation",
-  "short_name": "RetroStation",
-  "description": "Menú de Juegos Retro",
-  "start_url": "/RetroStation/",
-  "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#0a0a0a",
-  "icons": [
-    {
-      // 🚨 CORRECCIÓN CRÍTICA: Se añade /RetroStation/
-      "src": "Icons/pwa-icon-192.png", 
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      // La versión 512 también debe ser corregida, aunque no dé error ahora.
-      "src": "Icons/pwa-icon-512.png", 
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
+    "name": "RetroStation",
+    "short_name": "RetroStation",
+    "description": "Una interfaz de menú moderna y rápida para emuladores y juegos retro.",
+    "start_url": "/index.html",
+    "display": "standalone",
+    "background_color": "#0a1f33",
+    "theme_color": "#254d7d",
+    "icons": [
+        {
+            "src": "/Icons/pwa-icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/Icons/pwa-icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
 }
-
-
-
