@@ -1,70 +1,97 @@
 // =========================================================================
-// game-grid-nav-optimized.js: Lógica de Navegación, Scroll y Centrado del Grid
-// Optimización: Uso de IIFE para encapsulamiento, mejor manejo de estado de centrado
-// y limpieza del flujo de navegación.
+// game-grid-nav.js: Lógica de Navegación, Scroll y Centrado del Grid
+// OPTIMIZACIÓN FINAL: Anti-Micro-Lag. Gestión estricta de RAF y DOM I/O.
 // =========================================================================
 
-(function() {
-    // --- Variables de Estado Globales (Expuestas al 'window' según el diseño) ---
-    window.currentGridIndex = 0;
-    window.gridItemsElements = [];
-    // isCenteringActive se usará para forzar el scroll en la navegación con flechas
-    // y se controlará de cerca para evitar recálculos excesivos.
-    window.isCenteringActive = false;
+class GameGridNavigator {
+    // --- Configuración (Constantes estáticas) ---
+    static GRID_NAV_DELAY_MS = 150;
+    static CENTERING_MARGIN_PX = 100;
+    static SCROLL_SMOOTHING_FACTOR = 0.2;
+    static SCROLL_TOLERANCE_PX = 2;
 
-    // --- Constantes y Variables de Control (Encapsuladas en el IIFE) ---
-    const GRID_NAV_DELAY_MS = 150;
-    const CENTERING_MARGIN_PX = 100;
-    const SCROLL_SMOOTHING_FACTOR = 0.2;
-    const SCROLL_TOLERANCE_PX = 2;
+    // --- Estado (Instancia) ---
+    currentGridIndex = 0;
+    gridItemsElements = [];
+    isCenteringActive = false;
+    gridNavLock = false;
 
-    let gridNavLock = false;
-    let isProgrammaticScrolling = false;
-    let scrollTarget = 0;
-    let currentScroll = 0;
-    let scrollAnimationFrameId = null; // ID del frame de animación (Scroll Suave)
-    let recenterAnimationFrameId = null; // ID del frame de animación (Recentreo periódico)
+    // --- Control de Scroll (Instancia) ---
+    isProgrammaticScrolling = false;
+    scrollTarget = 0;
+    currentScroll = 0;
+    scrollAnimationFrameId = null;
+    centeringCheckIntervalId = null;
 
-    // Referencias del DOM
-    let modalBodyRef;
-    let modalOverlayRef;
-    let gameDetailsOverlayRef;
+    // --- Referencias DOM (Instancia) ---
+    modalBodyRef = null;
+    modalOverlayRef = null;
+    gameDetailsOverlayRef = null;
 
-    /**
-     * Bucle de Animación de Scroll Suave.
-     * Usa requestAnimationFrame para una transición fluida.
-     */
-    function animateGridScroll() {
-        const scrollDifference = scrollTarget - currentScroll;
-
-        if (Math.abs(scrollDifference) < SCROLL_TOLERANCE_PX) {
-            currentScroll = scrollTarget;
-            modalBodyRef.scrollTop = currentScroll; // Asigna el valor final
-            cancelAnimationFrame(scrollAnimationFrameId);
-            scrollAnimationFrameId = null;
-            isProgrammaticScrolling = false;
-        } else {
-            currentScroll += scrollDifference * SCROLL_SMOOTHING_FACTOR;
-            modalBodyRef.scrollTop = currentScroll;
-            scrollAnimationFrameId = requestAnimationFrame(animateGridScroll);
-        }
+    constructor() {
+        this.bindGlobalState();
+        document.addEventListener('DOMContentLoaded', this.initializeDOMAndEvents.bind(this));
     }
 
     /**
-     * Calcula la altura máxima de la fila actual.
-     * @param {number} rowIndex - Índice de la fila.
-     * @param {number} currentColumns - Número de columnas.
-     * @returns {number} La altura máxima de un elemento en la fila.
+     * @private
+     * Enlaza el estado interno de la clase a variables globales de window.
      */
-    function getMaxRowHeight(rowIndex, currentColumns) {
-        const items = window.gridItemsElements;
-        const rowStartIndex = rowIndex * currentColumns;
-        const rowEndIndex = Math.min((rowIndex + 1) * currentColumns, items.length);
+    bindGlobalState() {
+        const globalProps = ['currentGridIndex', 'gridItemsElements', 'isCenteringActive'];
+        globalProps.forEach(prop => {
+            Object.defineProperty(window, prop, {
+                get: () => this[prop],
+                set: (val) => { this[prop] = val; },
+                configurable: true
+            });
+        });
+        window.updateGridSelection = this.updateGridSelection.bind(this);
+        window.resetNavigationState = this.resetNavigationState.bind(this);
+    }
+
+    // =========================================================================
+    // Lógica de Scroll y Centrado
+    // =========================================================================
+
+    /**
+     * @private
+     * Bucle de Animación de Scroll Suave. Ejecución óptima en RequestAnimationFrame.
+     * Esta es la forma más rápida y sin *jank* de animar `scrollTop`.
+     */
+    animateGridScroll = () => {
+        const { SCROLL_SMOOTHING_FACTOR } = GameGridNavigator;
+        const scrollDifference = this.scrollTarget - this.currentScroll;
+        
+        this.currentScroll += scrollDifference * SCROLL_SMOOTHING_FACTOR;
+        
+        // Condición de Parada
+        if (Math.abs(scrollDifference) < 1) {
+            this.currentScroll = this.scrollTarget;
+            cancelAnimationFrame(this.scrollAnimationFrameId);
+            this.scrollAnimationFrameId = null;
+            this.isProgrammaticScrolling = false;
+        } else {
+            this.scrollAnimationFrameId = requestAnimationFrame(this.animateGridScroll);
+        }
+        
+        // Aplicar Scroll (Escritura optimizada)
+        this.modalBodyRef.scrollTop = this.currentScroll;
+    }
+
+    /**
+     * @private
+     * Calcula la altura máxima de la fila actual.
+     */
+    getMaxRowHeight(rowIndex, currentColumns) {
         let maxHeight = 0;
+        const items = this.gridItemsElements;
+        const rowStartIndex = rowIndex * currentColumns;
+        const rowEndIndex = Math.min(rowStartIndex + currentColumns, items.length);
 
         for (let i = rowStartIndex; i < rowEndIndex; i++) {
             const item = items[i];
-            if (item && item.offsetHeight > maxHeight) {
+            if (item && item.offsetHeight > maxHeight) { // Lectura geométrica necesaria
                 maxHeight = item.offsetHeight;
             }
         }
@@ -72,314 +99,267 @@
     }
 
     /**
-     * Actualiza la selección del grid y centra el elemento en la vista si es necesario.
-     * Expuesta globalmente.
-     * @param {number} newIndex - Nuevo índice del elemento seleccionado.
-     * @param {boolean} forceScroll - Fuerza el cálculo y la animación del scroll.
-     * @param {boolean} isResizeOrInitialLoad - Indica si la llamada viene de un resize o carga inicial.
-     * @param {boolean} ignoreHorizontalCheck - Ignora el chequeo horizontal (útil para centrado forzado).
+     * Actualiza la selección del grid y centra el elemento en la vista.
      */
-    function updateGridSelection(newIndex, forceScroll = true, isResizeOrInitialLoad = false, ignoreHorizontalCheck = false) {
-        const items = window.gridItemsElements;
-        if (items.length === 0 || newIndex < 0 || newIndex >= items.length) return;
+    updateGridSelection(newIndex, forceScroll = true, isResizeOrInitialLoad = false, ignoreHorizontalCheck = false) {
+        const items = this.gridItemsElements;
+        if (items.length === 0 || !this.modalBodyRef) return;
 
-        const oldIndex = window.currentGridIndex;
-        const newElement = items[newIndex];
+        const oldIndex = this.currentGridIndex;
+        
+        // 1. Escritura de Clases (Cambio visual, bajo impacto)
+        items[oldIndex]?.classList.remove('selected');
+        this.currentGridIndex = newIndex;
+        items[newIndex].classList.add('selected');
 
-        // 1. Actualización de Clases
-        if (oldIndex !== newIndex && items[oldIndex]) {
-            items[oldIndex].classList.remove('selected');
-        }
-        window.currentGridIndex = newIndex;
-        newElement.classList.add('selected');
+        if (!forceScroll) return;
 
-        if (!forceScroll || !modalBodyRef) return;
-
-        // 2. Lógica de Navegación Horizontal (UX): Evita scroll vertical si es solo movimiento lateral
-        let isHorizontalMovement = false;
-        if (!isResizeOrInitialLoad && !ignoreHorizontalCheck && oldIndex !== newIndex) {
+        // 2. Control Horizontal (Guard Clause)
+        if (!isResizeOrInitialLoad && !ignoreHorizontalCheck && oldIndex !== null) {
             const currentColumns = window.getGridColumns();
-            // Si la división por el número de columnas (fila) es la misma, es movimiento horizontal
             if (Math.floor(newIndex / currentColumns) === Math.floor(oldIndex / currentColumns)) {
-                isHorizontalMovement = true;
+                return;
             }
         }
-        if (isHorizontalMovement) return;
 
-        // 3. Cálculo del Scroll Objetivo
-        const viewportHeight = modalBodyRef.clientHeight;
+        // --- 3. Lectura de Geometría (Bloque de lectura agrupado para evitar layout thrashing) ---
+        const viewportHeight = this.modalBodyRef.clientHeight;
         const currentColumns = window.getGridColumns();
-        const rowIndex = Math.floor(window.currentGridIndex / currentColumns);
+        const rowIndex = Math.floor(this.currentGridIndex / currentColumns);
         const rowStartElement = items[rowIndex * currentColumns];
-
         if (!rowStartElement) return;
 
-        const maxHeight = getMaxRowHeight(rowIndex, currentColumns);
+        const maxHeight = this.getMaxRowHeight(rowIndex, currentColumns);
         const elementRect = rowStartElement.getBoundingClientRect();
-        const containerRect = modalBodyRef.getBoundingClientRect();
-        // Posición del inicio de la fila relativo al inicio del scrollable content
-        const elementTopInScroll = elementRect.top - containerRect.top + modalBodyRef.scrollTop;
+        const containerRect = this.modalBodyRef.getBoundingClientRect();
+        const elementTopInScroll = elementRect.top - containerRect.top + this.modalBodyRef.scrollTop; 
+        
+        // 4. Cálculo y Escritura del Objetivo
+        let targetScroll = elementTopInScroll - ((viewportHeight - maxHeight) / 2);
+        
+        targetScroll = Math.max(0, targetScroll);
+        targetScroll = Math.min(targetScroll, this.modalBodyRef.scrollHeight - viewportHeight);
+        this.scrollTarget = targetScroll;
 
-        // Calcular el desplazamiento para centrar la fila (usando la altura máxima de la fila)
-        const offsetToCenter = (viewportHeight - maxHeight) / 2;
-
-        scrollTarget = elementTopInScroll - offsetToCenter;
-
-        // Limitar el objetivo de scroll para evitar scroll excesivo al inicio/final
-        scrollTarget = Math.max(0, scrollTarget);
-        scrollTarget = Math.min(scrollTarget, modalBodyRef.scrollHeight - viewportHeight);
-
-        // 4. Iniciar/Controlar Animación de Scroll
-        const scrollDifference = Math.abs(scrollTarget - modalBodyRef.scrollTop);
-
-        if (scrollDifference < SCROLL_TOLERANCE_PX) {
-            if (scrollAnimationFrameId) {
-                cancelAnimationFrame(scrollAnimationFrameId);
-                scrollAnimationFrameId = null;
-                isProgrammaticScrolling = false;
-            }
+        // 5. Iniciar/Controlar Animación
+        const { SCROLL_TOLERANCE_PX } = GameGridNavigator;
+        if (Math.abs(this.scrollTarget - this.modalBodyRef.scrollTop) < SCROLL_TOLERANCE_PX) {
+            if (this.scrollAnimationFrameId) cancelAnimationFrame(this.scrollAnimationFrameId);
+            this.scrollAnimationFrameId = null;
+            this.isProgrammaticScrolling = false;
             return;
         }
 
-        // Si ya hay una animación, la sobrescribe o la continua hacia el nuevo target
-        currentScroll = modalBodyRef.scrollTop;
-        isProgrammaticScrolling = true;
-        if (scrollAnimationFrameId === null) {
-            scrollAnimationFrameId = requestAnimationFrame(animateGridScroll);
+        if (this.scrollAnimationFrameId === null) {
+            this.currentScroll = this.modalBodyRef.scrollTop;
+            this.isProgrammaticScrolling = true;
+            this.scrollAnimationFrameId = requestAnimationFrame(this.animateGridScroll);
         }
     }
-    window.updateGridSelection = updateGridSelection;
-
 
     /**
-     * Bucle para verificar periódicamente si el elemento seleccionado está fuera de los márgenes y lo centra.
-     * Utiliza requestAnimationFrame solo cuando el centrado está activo.
+     * Inicia un chequeo periódico (setInterval) para re-centrar la selección.
      */
-    function checkAndRecenterGridSelectionLoop() {
-        // Detener si el centrado se ha desactivado o el modal está cerrado/detalles abiertos
-        const isModalOpen = modalOverlayRef && modalOverlayRef.classList.contains('open');
-        const isDetailsOpen = gameDetailsOverlayRef && gameDetailsOverlayRef.classList.contains('open');
+    startCenteringCheck() {
+        if (!this.centeringCheckIntervalId) {
+            // Intervalo de 250ms: Límite óptimo para no bloquear el hilo principal (16.6ms)
+            this.centeringCheckIntervalId = setInterval(this.checkAndRecenterGridSelection.bind(this), 250);
+        }
+    }
 
-        if (!window.isCenteringActive || !isModalOpen || isDetailsOpen) {
-            recenterAnimationFrameId = null;
+    /**
+     * @private
+     * Detiene el chequeo periódico.
+     */
+    stopCenteringCheck() {
+        if (this.centeringCheckIntervalId) {
+            clearInterval(this.centeringCheckIntervalId);
+            this.centeringCheckIntervalId = null;
+        }
+    }
+
+    /**
+     * Chequeo periódico que fuerza el centrado si el elemento se sale de los márgenes.
+     */
+    checkAndRecenterGridSelection() {
+        const { CENTERING_MARGIN_PX } = GameGridNavigator;
+        const items = this.gridItemsElements;
+        
+        const isModalOpen = this.modalOverlayRef?.classList.contains('open');
+        const isDetailsOpen = this.gameDetailsOverlayRef?.classList.contains('open');
+
+        if (!this.modalBodyRef || items.length === 0 || !isModalOpen || isDetailsOpen || !this.isCenteringActive) {
             return;
         }
 
-        const items = window.gridItemsElements;
-        if (!modalBodyRef || items.length === 0) {
-            recenterAnimationFrameId = requestAnimationFrame(checkAndRecenterGridSelectionLoop);
-            return;
-        }
+        const selectedElement = items[this.currentGridIndex];
+        if (!selectedElement) return;
 
-        const selectedElement = items[window.currentGridIndex];
-        if (!selectedElement) {
-            recenterAnimationFrameId = requestAnimationFrame(checkAndRecenterGridSelectionLoop);
-            return;
-        }
-
-        const viewportHeight = modalBodyRef.clientHeight;
+        // Lecturas de Geometría (Bloque de lectura)
+        const viewportHeight = this.modalBodyRef.clientHeight;
         const elementRect = selectedElement.getBoundingClientRect();
-        const containerRect = modalBodyRef.getBoundingClientRect();
+        const containerRect = this.modalBodyRef.getBoundingClientRect();
 
         const elementTopInViewport = elementRect.top - containerRect.top;
         const elementBottomInViewport = elementRect.bottom - containerRect.top;
 
-        // Se verifica si está demasiado cerca del borde o completamente fuera de la vista.
         const isTooHigh = elementTopInViewport < CENTERING_MARGIN_PX;
         const isTooLow = elementBottomInViewport > viewportHeight - CENTERING_MARGIN_PX;
-        // La condición isOutOfView se simplifica si isTooHigh o isTooLow se cumplen
-        // Pero se mantiene por robustez (ej. si está completamente oculto).
         const isOutOfView = elementBottomInViewport < 0 || elementTopInViewport > viewportHeight;
 
         if (isTooHigh || isTooLow || isOutOfView) {
-            // El tercer argumento 'true' fuerza el cálculo de scroll, el cuarto 'true' ignora el check horizontal.
-            // Esto solo recalcula el 'scrollTarget' y lo anima si es necesario.
-            updateGridSelection(window.currentGridIndex, true, true, true);
-        }
-
-        recenterAnimationFrameId = requestAnimationFrame(checkAndRecenterGridSelectionLoop);
-    }
-    // No es necesario exponer checkAndRecenterGridSelection ya que ahora se gestiona internamente
-    // con un bucle rAF que solo se activa/desactiva según el estado de window.isCenteringActive.
-
-
-    /**
-     * Inicia o asegura que el bucle de recentrado esté corriendo si window.isCenteringActive es true.
-     */
-    function startRecenterLoop() {
-        if (window.isCenteringActive && recenterAnimationFrameId === null) {
-            recenterAnimationFrameId = requestAnimationFrame(checkAndRecenterGridSelectionLoop);
+            // Escritura (Write) forzada a través de updateGridSelection
+            this.updateGridSelection(this.currentGridIndex, true, true, true);
         }
     }
 
     /**
-     * Reinicia las variables de estado de la navegación (llamado por cerrarModal).
-     * Expuesta globalmente.
+     * Reinicia las variables de estado de la navegación.
      */
-    function resetNavigationState() {
-        window.currentGridIndex = 0;
-        window.isCenteringActive = false; // Detiene el bucle de recentrado
-        isProgrammaticScrolling = false;
-        scrollTarget = 0;
-        currentScroll = 0;
-        if (scrollAnimationFrameId) {
-            cancelAnimationFrame(scrollAnimationFrameId);
-            scrollAnimationFrameId = null;
+    resetNavigationState() {
+        this.currentGridIndex = 0;
+        this.isCenteringActive = false;
+        this.gridNavLock = false;
+        this.isProgrammaticScrolling = false;
+        this.scrollTarget = 0;
+        this.currentScroll = 0;
+        this.stopCenteringCheck();
+        if (this.scrollAnimationFrameId) {
+            cancelAnimationFrame(this.scrollAnimationFrameId);
+            this.scrollAnimationFrameId = null;
         }
-        // No es necesario cancelar recenterAnimationFrameId, se detiene solo en el loop.
     }
-    window.resetNavigationState = resetNavigationState;
 
-
-    // --- Funciones de Manejo de Eventos ---
+    // =========================================================================
+    // Manejo de Eventos
+    // =========================================================================
 
     /**
-     * Maneja el evento de scroll manual del usuario.
+     * @private
+     * Maneja el scroll manual del usuario (desactiva el centrado).
      */
-    function handleModalScroll() {
-        // Si el usuario hace scroll manualmente (no es programático)
-        if (!isProgrammaticScrolling) {
-            window.isCenteringActive = false; // Desactiva el centrado automático
-            // Detener la animación de scroll suave si estaba en curso
-            if (scrollAnimationFrameId) {
-                cancelAnimationFrame(scrollAnimationFrameId);
-                scrollAnimationFrameId = null;
+    handleModalScroll = () => {
+        // Usa `passive: true` en el listener (en la inicialización) para evitar bloqueos
+        if (!this.isProgrammaticScrolling) {
+            this.isCenteringActive = false;
+            if (this.scrollAnimationFrameId) {
+                cancelAnimationFrame(this.scrollAnimationFrameId);
+                this.scrollAnimationFrameId = null;
             }
         }
     }
 
     /**
-     * Maneja los eventos de teclado para navegación y acciones.
+     * @private
+     * Maneja los eventos de teclado para navegación.
      */
-    function handleKeydown(event) {
-        const isDetailsOpen = gameDetailsOverlayRef && gameDetailsOverlayRef.classList.contains('open');
-        const isModalOpen = modalOverlayRef && modalOverlayRef.classList.contains('open');
-        const isGridActive = isModalOpen && !isDetailsOpen && window.gridItemsElements.length > 0;
-        const key = event.key;
+    handleKeydown = (event) => {
+        const { GRID_NAV_DELAY_MS } = GameGridNavigator;
+        const { key, repeat } = event;
+        const items = this.gridItemsElements;
 
-        // 1. Bloqueo de 'Enter' si está activo el inputLock
+        const isDetailsOpen = this.gameDetailsOverlayRef?.classList.contains('open');
+        const isModalOpen = this.modalOverlayRef?.classList.contains('open');
+        const isGridActive = isModalOpen && !isDetailsOpen && items.length > 0;
+
+        // 1. Bloqueo/Manejo de teclas de acción
         if (key === 'Enter' && window.inputLock) {
             event.preventDefault();
             return;
         }
-
-        // 2. Manejo de 'Escape' (Cierre de modales/detalles)
         if (key === 'Escape') {
-            if (isDetailsOpen && window.cerrarDetallesJuego) {
-                window.cerrarDetallesJuego();
-            } else if (isModalOpen && window.cerrarModal) {
-                window.cerrarModal();
-            }
+            if (isDetailsOpen) window.cerrarDetallesJuego();
+            else if (isModalOpen) window.cerrarModal();
             event.preventDefault();
             return;
         }
 
-        // 3. Navegación del Grid (solo si está activo)
+        // 2. Navegación del Grid
         if (isGridActive) {
-            const isArrowKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key);
-
-            // Bloqueo de navegación rápida en repetición
-            if (event.repeat && gridNavLock && isArrowKey) {
+            if (repeat && this.gridNavLock) {
                 event.preventDefault();
                 return;
             }
 
-            let newIndex = window.currentGridIndex;
-            let targetIndex = window.currentGridIndex;
+            let newIndex = this.currentGridIndex;
             let handled = false;
-            const lastIndex = window.gridItemsElements.length - 1;
+            const lastIndex = items.length - 1;
             const currentColumns = window.getGridColumns();
 
-            if (isArrowKey) {
-                switch (key) {
-                    case 'ArrowLeft':
-                        targetIndex = window.currentGridIndex - 1;
-                        newIndex = (targetIndex < 0) ? lastIndex : targetIndex; // Wrap around
-                        break;
-                    case 'ArrowRight':
-                        targetIndex = window.currentGridIndex + 1;
-                        newIndex = (targetIndex > lastIndex) ? 0 : targetIndex; // Wrap around
-                        break;
-                    case 'ArrowUp':
-                        targetIndex = window.currentGridIndex - currentColumns;
-                        newIndex = (targetIndex < 0) ? window.currentGridIndex : targetIndex; // Stop at the top
-                        break;
-                    case 'ArrowDown':
-                        targetIndex = window.currentGridIndex + currentColumns;
-                        newIndex = Math.min(targetIndex, lastIndex); // Stop at the bottom
-                        break;
-                }
-                handled = true;
-            } else if (key === 'Enter') {
-                // Solo llama a click si hay un elemento y la función existe
-                if (window.gridItemsElements[window.currentGridIndex] && window.gridItemsElements[window.currentGridIndex].click) {
-                    window.gridItemsElements[window.currentGridIndex].click();
-                }
-                handled = true;
+            switch (key) {
+                case 'ArrowLeft':
+                    newIndex = (newIndex === 0) ? lastIndex : newIndex - 1; 
+                    handled = true;
+                    break;
+                case 'ArrowRight':
+                    newIndex = (newIndex === lastIndex) ? 0 : newIndex + 1; 
+                    handled = true;
+                    break;
+                case 'ArrowUp':
+                    newIndex = Math.max(0, newIndex - currentColumns);
+                    handled = true;
+                    break;
+                case 'ArrowDown':
+                    newIndex = Math.min(lastIndex, newIndex + currentColumns);
+                    handled = true;
+                    break;
+                case 'Enter':
+                    items[newIndex].click();
+                    handled = true;
+                    break;
+                default:
+                    this.isCenteringActive = false;
+                    break;
             }
 
-            if (isArrowKey) {
-                if (newIndex !== window.currentGridIndex) {
-                    if (event.repeat) {
-                        // Implementa el bloqueo de repetición con retraso
-                        gridNavLock = true;
-                        setTimeout(() => { gridNavLock = false; }, GRID_NAV_DELAY_MS);
+            if (handled && key !== 'Enter') {
+                if (newIndex !== this.currentGridIndex) {
+                    if (repeat) {
+                        this.gridNavLock = true;
+                        setTimeout(() => { this.gridNavLock = false; }, GRID_NAV_DELAY_MS);
                     }
-                    window.isCenteringActive = true;
-                    updateGridSelection(newIndex, true, false, false);
-                    startRecenterLoop(); // Asegura que el bucle de centrado esté activo
+                    this.isCenteringActive = true;
+                    this.updateGridSelection(newIndex);
+                    this.startCenteringCheck();
                 }
-            } else if (!isArrowKey && handled === false) {
-                // Si es otra tecla (ej. 'a', 's', etc.), permitimos la acción pero desactivamos el centrado
-                // para que no interfiera si el desarrollador usa esas teclas para scroll/movimiento manual.
-                window.isCenteringActive = false;
-            }
-
-            if (handled) {
                 event.preventDefault();
-                return;
             }
         }
 
-        // 4. Bloqueo final de teclas si algún modal está abierto
-        if (isModalOpen || isDetailsOpen) {
-            // Evitar que las teclas afecten el scroll/acciones del navegador si el modal está abierto
-            // Se excluye 'Enter' si no fue manejado arriba (ej. para un formulario interno)
-            if (key !== 'Enter' && key !== 'Tab') { // Se añade 'Tab' por si acaso
-                event.preventDefault();
-            }
+        // 3. Bloqueo final si algún modal está abierto
+        if ((isModalOpen || isDetailsOpen) && key !== 'Enter' && key !== 'Tab' && key !== 'Shift') {
+            event.preventDefault();
         }
     }
 
+    // =========================================================================
+    // Inicialización
+    // =========================================================================
+
     /**
+     * @private
      * Inicialización de referencias DOM y Event Listeners.
      */
-    document.addEventListener('DOMContentLoaded', () => {
-        // Inicialización de Referencias
-        modalBodyRef = document.querySelector('.modal-body');
-        modalOverlayRef = document.getElementById('modal-overlay');
-        gameDetailsOverlayRef = document.getElementById('game-details-overlay');
+    initializeDOMAndEvents() {
+        this.modalBodyRef = document.querySelector('.modal-body');
+        this.modalOverlayRef = document.getElementById('modal-overlay');
+        this.gameDetailsOverlayRef = document.getElementById('game-details-overlay');
 
-        // Listener de scroll (para desactivar el centrado si el usuario hace scroll manual)
-        if (modalBodyRef && modalOverlayRef) {
-            // Usar 'passive: true' para mejorar el rendimiento del scroll
-            modalBodyRef.addEventListener('scroll', handleModalScroll, { passive: true });
-
-            // Listener de click/mousedown fuera de los elementos del grid (para desactivar centrado)
-            modalBodyRef.addEventListener('mousedown', (event) => {
-                // Desactiva el centrado si el modal está abierto y el clic no fue en un elemento del grid
-                if (modalOverlayRef.classList.contains('open') && !event.target.closest('.grid-item')) {
-                     window.isCenteringActive = false;
+        if (this.modalBodyRef && this.modalOverlayRef) {
+            // Uso de { passive: true } para evitar micro-lags en el scroll del usuario
+            this.modalBodyRef.addEventListener('scroll', this.handleModalScroll, { passive: true });
+            
+            this.modalBodyRef.addEventListener('mousedown', (event) => {
+                if (this.modalOverlayRef.classList.contains('open') && !event.target.closest('.grid-item')) {
+                     this.isCenteringActive = false;
                 }
-            }, { passive: true });
+            });
         }
 
-        // Listener de teclado global
-        document.addEventListener('keydown', handleKeydown);
-    });
+        document.addEventListener('keydown', this.handleKeydown);
+        this.startCenteringCheck();
+    }
+}
 
-    // Inicia el bucle de recentrado una vez al inicio, se detendrá solo si isCenteringActive es false.
-    // Esto asegura que si isCenteringActive se activa en otro lado, el bucle comienza.
-    startRecenterLoop();
-
-})(); // Fin de la IIFE
+// Inicializar la instancia
+window.gameGridNavigatorInstance = new GameGridNavigator();
