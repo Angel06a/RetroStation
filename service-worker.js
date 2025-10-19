@@ -1,44 +1,21 @@
-const CACHE_NAME = 'retrostation-cache-v6'; // 🚨 CAMBIO CRÍTICO: Nueva Versión
+const CACHE_NAME = 'retrostation-cache-v7'; // 🚨 CAMBIO CRÍTICO: Nueva Versión
 
-// 🚨 ESTRATEGIA: Rutas RELATIVAS SIMPLES. Se asume que el Service Worker
-// instalado en la raíz del repositorio puede resolver estas rutas como lo hace el HTML.
-// Se excluye 'index.html' para evitar la Condición de Carrera.
-const urlsToCache = [
-    'main-menu.css',
-    'grid-menu.css',
-    'game-details.css',
-    // Archivos JavaScript
-    'Js/data.js',
-    'Js/utils.js',
-    'Js/game-data-loader.js',
-    'Js/main-modal-manager.js',
-    'Js/game-grid-nav.js',
-    'Js/mediafire-downloader.js',
-    'Js/game-details-logic.js',
-    'Js/ui-logic.js',
-    // Íconos e imágenes
-    'Icons/back.svg',
-    'Icons/loading.svg',
-    'Icons/favicon.png',
-    'Icons/preview.jpg',
-    // Íconos PWA
-    'Icons/pwa-icon-192.png',
-    'Icons/pwa-icon-512.png',
-];
+// Lista de archivos para cachear (ya no se usa aquí, solo para referencia)
+// const urlsToCache = [ ... ]; // (Se omite la lista aquí para evitar el error)
 
-// Evento 1: Instalación (almacenar archivos estáticos en caché)
+// Evento 1: Instalación (SOLO abre el caché, NO descarga archivos)
 self.addEventListener('install', event => {
+  console.log('Service Worker: Instalación exitosa. Omitiendo cache.addAll para evitar conflicto en GitHub Pages.');
+  
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Service Worker: Cache Abierta');
-        // Agrega todos los archivos restantes a la caché
-        return cache.addAll(urlsToCache);
+      .then(() => {
+        // Importante: No hay cache.addAll() aquí.
+        // self.skipWaiting() fuerza que el SW tome el control inmediatamente
+        return self.skipWaiting(); 
       })
       .catch(err => {
-        // MUY IMPORTANTE: El Service Worker se detiene si esto falla.
-        console.error('Error CRÍTICO al cachear archivos. Revise cada ruta:', err);
-        console.error('Lista de archivos que fallaron al intentar cachear:', urlsToCache);
+        console.error('Error al abrir la caché durante la instalación:', err);
       })
   );
 });
@@ -60,8 +37,9 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Evento 3: Fetch (servir desde la caché o ir a la red)
+// Evento 3: Fetch (servir desde la caché o ir a la red y CACHEAR)
 self.addEventListener('fetch', event => {
+  // Ignora las solicitudes externas (como mediafire)
   if (!event.request.url.startsWith(self.location.origin)) {
     return;
   }
@@ -69,21 +47,26 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
+        // 1. Si encuentra el archivo en caché, lo devuelve inmediatamente.
         if (response) {
           return response;
         }
         
+        // 2. Si no está en caché, va a la red.
         return fetch(event.request).then(
           function(response) {
+            // Verifica que la respuesta de la red sea válida (status 200, tipo basic)
             if(!response || response.status !== 200 || response.type !== 'basic') {
               return response;
             }
             
+            // 3. Clona la respuesta antes de cachearla, ya que el original
+            // es usado por el navegador.
             var responseToCache = response.clone();
 
+            // 4. Guarda la respuesta en caché para futuras visitas.
             caches.open(CACHE_NAME)
               .then(function(cache) {
-                // Esto cachea el index.html y otros archivos en la primera visita exitosa
                 cache.put(event.request, responseToCache);
               });
 
