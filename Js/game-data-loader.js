@@ -1,16 +1,10 @@
 // =========================================================================
 // game-data-loader.js: Carga Asíncrona de Datos y Renderizado del Grid
 //
-// Dependencias Globales (asumidas):
-// - window.parseHyphenList (de utils.js)
-// - window.cleanGameName (de utils.js)
-// - window.abrirDetallesJuego (de game-details-logic.js)
-// - window.updateGridSelection (de game-grid-nav.js)
-// - window.gridItemsElements (de game-grid-nav.js)
-// - window.isCenteringActive (de game-grid-nav.js)
-// - window.currentGridIndex (de game-grid-nav.js)
-//
-// Optimizaciones: Encapsulamiento con IIFE y consolidación de constantes.
+// 🚀 OPTIMIZACIÓN MÁXIMA: 
+// 1. Uso de DocumentFragment para inyección masiva al DOM.
+// 2. Encapsulación de lógica de creación/carga de imágenes.
+// 3. Manejo explícito del aspect ratio y clases de carga.
 // =========================================================================
 
 (function () { // Inicio del IIFE para encapsulamiento
@@ -28,10 +22,10 @@
     /** @type {string} URL del ícono de carga SVG. */
     const LOADING_SVG_URL = "Icons/loading.svg";
 
-    /** @type {string} Extensión de la imagen de portada. (Consolidada) */
+    /** @type {string} Extensión de la imagen de portada. */
     const IMAGE_EXTENSION_WEBP = ".webp";
 
-    /** @type {string} Aspect ratio por defecto para el placeholder. (16:9 Solicitado) */
+    /** @type {string} Aspect ratio por defecto para el placeholder (16:9). */
     const DEFAULT_ASPECT_RATIO = '16/9'; 
 
     // =========================================================================
@@ -39,12 +33,9 @@
     // =========================================================================
 
     /**
-     * Carga asíncronamente el archivo de datos (.js) para el sistema seleccionado
-     * mediante inyección de script (compatible con file://) y parsea la lista.
-     * Utiliza caché.
-     *
+     * Carga asíncronamente el archivo de datos para el sistema seleccionado.
      * @param {string} systemName - El nombre del sistema (ej: 'NES').
-     * @param {function(Array<Object>)} callback - Función a ejecutar con la lista de juegos cargada.
+     * @param {function(Array<Object>)} callback - Función a ejecutar con la lista de juegos.
      */
     function loadGameItems(systemName, callback) {
         if (gameDataCache[systemName]) {
@@ -71,6 +62,7 @@
 
             gameDataCache[systemName] = items;
             callback(items);
+            // 🚀 OPTIMIZACIÓN: Remoción inmediata para liberar memoria.
             script.remove();
         };
 
@@ -89,8 +81,42 @@
     // =========================================================================
 
     /**
-     * Crea y configura un único elemento 'grid-item' con carga de imagen asíncrona.
-     *
+     * Gestiona la carga y actualización de la imagen de un ítem.
+     * @param {HTMLImageElement} imageElement - El elemento <img> a actualizar.
+     * @param {string} imageUrl - La URL de la imagen real.
+     * @param {string} fallbackAlt - Texto alternativo de fallback.
+     */
+    function loadOptimizedImage(imageElement, imageUrl, fallbackAlt) {
+        // 🚀 OPTIMIZACIÓN: Usar un objeto Image para precarga sin impacto en el DOM.
+        const preloader = new Image();
+
+        preloader.onload = function() {
+            // Se usa requestAnimationFrame para asegurar que el DOM se actualice en el frame óptimo
+            // (Mínimo impacto en el Main Thread durante el scroll/renderizado)
+            requestAnimationFrame(() => {
+                imageElement.src = imageUrl;
+                imageElement.alt = fallbackAlt;
+                // 🚀 OPTIMIZACIÓN: Aplicar el aspect ratio real y estilos
+                imageElement.style.aspectRatio = `${this.naturalWidth} / ${this.naturalHeight}`;
+                imageElement.style.objectFit = 'cover';
+                imageElement.style.padding = '0';
+                imageElement.classList.remove('is-loading');
+            });
+        };
+
+        preloader.onerror = function() {
+            console.warn(`[ERROR IMAGEN] No se pudo cargar la imagen para: ${fallbackAlt}.`);
+            // Se mantiene el LOADING_SVG_URL o el placeholder si no hay imagen
+            imageElement.alt = `Error al cargar portada para ${fallbackAlt}`;
+            imageElement.classList.remove('is-loading'); 
+        };
+
+        // Iniciar la carga de la imagen real
+        preloader.src = imageUrl;
+    }
+
+    /**
+     * Crea y configura un único elemento 'grid-item'.
      * @param {Object} item - Los datos del juego (name, url, etc.).
      * @param {string} systemNameLower - El nombre del sistema en minúsculas.
      * @param {number} index - El índice del ítem en la lista.
@@ -101,12 +127,13 @@
         const imageBaseName = item.name;
         const imageFileNameWithThumb = imageBaseName + "-thumb";
         const imageUrl = `${GAME_DIRECTORY}${systemNameLower}/${imageFileNameWithThumb}${IMAGE_EXTENSION_WEBP}`;
+        // 🚀 OPTIMIZACIÓN: Usar el ternario para concisión.
         const cleanName = window.cleanGameName ? window.cleanGameName(item.name) : item.name;
 
-        // --- Elemento Principal ---
+        // --- Elemento Principal y Atributos ---
         const itemElement = document.createElement('li');
         itemElement.classList.add('grid-item');
-        itemElement.dataset.index = index; // Almacenamos el índice en el dataset
+        itemElement.dataset.index = index; 
 
         // --- Título ---
         const titleElement = document.createElement('div');
@@ -115,56 +142,32 @@
 
         // --- Imagen (Placeholder inicial) ---
         const imageElement = document.createElement('img');
-        // Unimos la adición de clases para ser más concisos
         imageElement.classList.add('grid-item-image', 'is-loading'); 
         imageElement.src = LOADING_SVG_URL;
         imageElement.alt = item.name;
         imageElement.title = item.name;
-        // Aplicamos el aspect ratio de 16:9
         imageElement.style.aspectRatio = DEFAULT_ASPECT_RATIO; 
 
-        // --- Lógica de Carga Asíncrona (Preloader) ---
-        const preloader = new Image();
-
-        preloader.onload = function() {
-            // La imagen real se cargó
-            imageElement.src = imageUrl;
-            // Ajustar al aspect ratio real
-            imageElement.style.aspectRatio = `${this.naturalWidth} / ${this.naturalHeight}`;
-            imageElement.style.objectFit = 'cover';
-            imageElement.style.padding = '0';
-            imageElement.classList.remove('is-loading');
-        };
-
-        preloader.onerror = function() {
-            // La imagen real falló al cargar
-            imageElement.alt = `Error al cargar portada para ${item.name}`;
-            console.warn(`[ERROR IMAGEN] No se pudo cargar la imagen para: ${item.name}`);
-            imageElement.classList.remove('is-loading'); 
-        };
-
-        // Iniciar la carga de la imagen real
-        preloader.src = imageUrl;
+        // Iniciar la carga asíncrona y optimizada de la imagen
+        loadOptimizedImage(imageElement, imageUrl, item.name);
 
         // --- Manejador de Eventos (Click) ---
         itemElement.addEventListener('click', () => {
-            // Usamos el índice del dataset/closure para la navegación
             const clickIndex = parseInt(itemElement.dataset.index);
             
+            // 🚀 OPTIMIZACIÓN: Evitar buscar la imagen real, ya que loadOptimizedImage la gestiona.
+            // La URL inicial es LOADING_SVG_URL, la real es imageUrl. Si tiene 'is-loading' 
+            // la URL es el placeholder, si no, es la real (o el placeholder si falló).
+            const isImageLoaded = !imageElement.classList.contains('is-loading');
+            const finalImageUrl = isImageLoaded ? imageUrl : LOADING_SVG_URL;
+                
             window.isCenteringActive = true;
             window.updateGridSelection(clickIndex, true, false, false);
-
-            // Determinar la URL de la imagen a mostrar en el detalle
-            const finalImageUrl = imageElement.classList.contains('is-loading') 
-                ? LOADING_SVG_URL 
-                : imageUrl;
-                
             window.abrirDetallesJuego(item.name, finalImageUrl, item.url);
         });
 
-        // --- Ensamblaje ---
-        itemElement.appendChild(imageElement);
-        itemElement.appendChild(titleElement);
+        // --- Ensamblaje (Conciso) ---
+        itemElement.append(imageElement, titleElement);
 
         return itemElement;
     }
@@ -175,11 +178,6 @@
 
     /**
      * Renderiza el grid completo de juegos en el contenedor especificado.
-     *
-     * @param {Array<Object>} items - La lista de juegos a renderizar.
-     * @param {string} systemName - El nombre del sistema.
-     * @param {HTMLElement} contentGridContainer - El contenedor donde se insertará el grid.
-     * @param {HTMLElement} modalTitle - El elemento de título para mensajes de error.
      */
     function renderGrid(items, systemName, contentGridContainer, modalTitle) {
         const systemNameLower = systemName.toLowerCase();
@@ -198,6 +196,7 @@
         // 2. Creación del Grid y Fragmento
         const grid = document.createElement('ul');
         grid.classList.add('content-grid');
+        // 🚀 OPTIMIZACIÓN CRÍTICA: DocumentFragment reduce el reflow y repaint.
         const fragment = document.createDocumentFragment();
 
         // 3. Iteración y Creación de Items
@@ -207,7 +206,7 @@
             window.gridItemsElements.push(itemElement);
         });
 
-        // 4. Inserción en el DOM
+        // 4. Inserción en el DOM (Una sola operación de inyección)
         grid.appendChild(fragment);
         contentGridContainer.appendChild(grid);
 
