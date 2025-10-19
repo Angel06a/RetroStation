@@ -28,26 +28,47 @@ let modalTitle;
 let contentGridContainer;
 
 /**
- * Función genérica y optimizada para precargar un recurso individual
- * y devolver una Promise que se resuelve al cargar.
+ * Función optimizada para precargar y DECODIFICAR asíncronamente un recurso.
+ * Implementa la misma lógica de optimización que _preloadAndDecodeImage en ui-logic.js.
  * @param {string} fullUrl La URL completa del recurso.
- * @returns {Promise<Event>} Una promesa que se resuelve al cargar la imagen.
+ * @returns {Promise<string>} Una promesa que se resuelve con la URL.
  */
-const loadResource = (fullUrl) => {
+const loadResourceOptimized = (fullUrl) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
-        img.onload = () => resolve(img);
+        img.onload = () => {
+            const decodeAction = () => {
+                if ('decode' in img) {
+                    // Decodificación asíncrona para navegadores modernos
+                    img.decode()
+                        .then(() => resolve(fullUrl))
+                        .catch(error => {
+                            console.warn(`Error al decodificar imagen: ${fullUrl}`, error);
+                            resolve(fullUrl); // Resolvemos en caso de fallo de decodificación
+                        });
+                } else {
+                    // Fallback: Resuelve inmediatamente si decode no está soportado
+                    resolve(fullUrl);
+                }
+            };
+
+            // Priorizar requestIdleCallback si está disponible, sino usar setTimeout
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(decodeAction);
+            } else {
+                setTimeout(decodeAction, 0);
+            }
+        };
         img.onerror = (e) => {
             console.warn(`Error al cargar el recurso: ${fullUrl}`);
-            resolve(e); // Resolvemos en error para que Promise.all no falle por 1 recurso
+            resolve(fullUrl); // Resolvemos en error para que Promise.all no falle por 1 recurso
         };
         img.src = fullUrl;
     });
 };
 
 /**
- * Precarga todos los recursos (imágenes de sistema y fondos).
- * Optimización: Usa Promise.all para gestionar la precarga de manera más controlada.
+ * Precarga todos los recursos (imágenes de sistema y fondos) usando la decodificación optimizada.
  */
 const preloadAllResources = () => {
     // Verificar que 'menuItems' esté disponible (viene de data.js)
@@ -61,22 +82,21 @@ const preloadAllResources = () => {
     menuItems.forEach(systemName => {
         // Precarga de Fondo (JPG)
         const bgUrl = BACKGROUND_DIR + systemName + BACKGROUND_EXT;
-        loadPromises.push(loadResource(bgUrl));
+        loadPromises.push(loadResourceOptimized(bgUrl));
 
         // Precarga de Imagen de Sistema (SVG)
         const imageUrl = IMAGE_DIR + systemName + IMAGE_EXT;
-        loadPromises.push(loadResource(imageUrl));
+        loadPromises.push(loadResourceOptimized(imageUrl));
     });
 
-    console.log(`[PRECARGA] Iniciando precarga de ${loadPromises.length} recursos...`);
+    console.log(`[PRECARGA] Iniciando precarga y decodificación de ${loadPromises.length} recursos...`);
 
     // Esperar a que todas las precargas finalicen
     Promise.all(loadPromises)
         .then(() => {
-            console.log("[PRECARGA] Todos los recursos han intentado cargarse (completado).");
+            console.log("[PRECARGA] Todos los recursos han intentado cargarse y decodificarse (completado).");
         })
         .catch(error => {
-            // Esto solo se ejecutaría si hay un error crítico en Promise.all, no por una imagen fallida
             console.error("[PRECARGA] Error CRÍTICO en la gestión de Promise.all:", error);
         });
 };
