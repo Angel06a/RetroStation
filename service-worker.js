@@ -1,29 +1,32 @@
-const CACHE_NAME = 'retrostation-cache-v4'; // 🚨 CAMBIO A: Nueva Versión
+const CACHE_NAME = 'retrostation-cache-v5'; // 🚨 CAMBIO A: Nueva Versión
 
-// Lista de todos los archivos estáticos de tu aplicación para caché inicial
-// 🛠️ CRÍTICO: Se añade './' a TODAS las rutas para forzar resolución correcta 
-// en el subdirectorio de GitHub Pages. Se excluye 'index.html' para evitar la Condición de Carrera.
+// 🚨 CRÍTICO: Reemplaza [NOMBRE_DEL_REPOSITORIO] por el nombre exacto de tu repositorio (ej: 'RetroStation').
+// Esto obliga al Service Worker a buscar los archivos en la ubicación correcta.
+const REPO_NAME = 'RetroStation'; 
+
 const urlsToCache = [
-    './main-menu.css',
-    './grid-menu.css',
-    './game-details.css',
+    // CRÍTICO: Excluimos la raíz (index.html) para evitar el conflicto de red inicial.
+    // Los demás archivos requieren el prefijo del repositorio.
+    `/${REPO_NAME}/main-menu.css`,
+    `/${REPO_NAME}/grid-menu.css`,
+    `/${REPO_NAME}/game-details.css`,
     // Archivos JavaScript
-    './Js/data.js',
-    './Js/utils.js',
-    './Js/game-data-loader.js',
-    './Js/main-modal-manager.js',
-    './Js/game-grid-nav.js',
-    './Js/mediafire-downloader.js',
-    './Js/game-details-logic.js',
-    './Js/ui-logic.js',
+    `/${REPO_NAME}/Js/data.js`,
+    `/${REPO_NAME}/Js/utils.js`,
+    `/${REPO_NAME}/Js/game-data-loader.js`,
+    `/${REPO_NAME}/Js/main-modal-manager.js`,
+    `/${REPO_NAME}/Js/game-grid-nav.js`,
+    `/${REPO_NAME}/Js/mediafire-downloader.js`,
+    `/${REPO_NAME}/Js/game-details-logic.js`,
+    `/${REPO_NAME}/Js/ui-logic.js`,
     // Íconos e imágenes
-    './Icons/back.svg',
-    './Icons/loading.svg',
-    './Icons/favicon.png',
-    './Icons/preview.jpg',
+    `/${REPO_NAME}/Icons/back.svg`,
+    `/${REPO_NAME}/Icons/loading.svg`,
+    `/${REPO_NAME}/Icons/favicon.png`,
+    `/${REPO_NAME}/Icons/preview.jpg`,
     // Íconos PWA
-    './Icons/pwa-icon-192.png',
-    './Icons/pwa-icon-512.png',
+    `/${REPO_NAME}/Icons/pwa-icon-192.png`,
+    `/${REPO_NAME}/Icons/pwa-icon-512.png`,
 ];
 
 // Evento 1: Instalación (almacenar archivos estáticos en caché)
@@ -43,14 +46,14 @@ self.addEventListener('install', event => {
   );
 });
 
-// Evento 2: Activación (limpiar cachés viejos)
+// [El código de activate y fetch (Eventos 2 y 3) sigue igual...]
+
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          // Si el nombre de la caché no está en la whitelist, bórrala
           if (cacheWhitelist.indexOf(cacheName) === -1) {
             console.log('Service Worker: Borrando caché antigua:', cacheName);
             return caches.delete(cacheName);
@@ -61,9 +64,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Evento 3: Fetch (servir desde la caché o ir a la red)
 self.addEventListener('fetch', event => {
-  // Ignora las solicitudes externas (como mediafire)
   if (!event.request.url.startsWith(self.location.origin)) {
     return;
   }
@@ -71,26 +72,20 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Devuelve el recurso desde la caché si está disponible
         if (response) {
           return response;
         }
         
-        // Si no está en caché, va a la red. Si es el 'index.html' o '/', 
-        // lo cachea aquí para las próximas visitas.
         return fetch(event.request).then(
           function(response) {
-            // Verifica que la respuesta sea válida
             if(!response || response.status !== 200 || response.type !== 'basic') {
               return response;
             }
             
-            // Si es un recurso local que queremos cachear, lo clonamos.
             var responseToCache = response.clone();
 
             caches.open(CACHE_NAME)
               .then(function(cache) {
-                // Esto cachea el index.html y otros archivos en la primera visita exitosa
                 cache.put(event.request, responseToCache);
               });
 
