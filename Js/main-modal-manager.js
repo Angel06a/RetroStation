@@ -1,6 +1,7 @@
 // =========================================================================
 // main-modal-manager.js: Funciones de Abrir/Cerrar Modal Principal y Estado Global
 // OPTIMIZADO: Incluye precarga controlada de fondos E IMÁGENES DE SISTEMA.
+// ⚠️ MEJORA ADVERSA: Garantía de no bloqueo de frame incluso en fallos de decode()
 //
 // Dependencias:
 // - game-data-loader.js (loadGameItems, renderGrid)
@@ -29,49 +30,61 @@ let contentGridContainer;
 
 /**
  * Función optimizada para precargar y DECODIFICAR asíncronamente un recurso.
- * Implementa la misma lógica de optimización que _preloadAndDecodeImage en ui-logic.js.
- * @param {string} fullUrl La URL completa del recurso.
+ * Prioriza requestIdleCallback para cualquier operación intensiva de CPU.
+ * * @param {string} fullUrl La URL completa del recurso.
  * @returns {Promise<string>} Una promesa que se resuelve con la URL.
  */
 const loadResourceOptimized = (fullUrl) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
+            // ================================================================
+            // 💡 OPTIMIZACIÓN CRÍTICA: Decodificación y Fallback en "Idle Time"
+            // ================================================================
             const decodeAction = () => {
                 if ('decode' in img) {
-                    // Decodificación asíncrona para navegadores modernos
+                    // Decodificación en HILO SECUNDARIO (no bloquea el frame)
                     img.decode()
                         .then(() => resolve(fullUrl))
                         .catch(error => {
-                            console.warn(`Error al decodificar imagen: ${fullUrl}`, error);
-                            resolve(fullUrl); // Resolvemos en caso de fallo de decodificación
+                            // Si decode falla (e.g., por memoria), resolvemos de forma NO BLOQUEANTE
+                            console.warn(`Error al decodificar imagen: ${fullUrl}. Resolviendo en fallback.`, error);
+                            resolve(fullUrl); 
                         });
                 } else {
-                    // Fallback: Resuelve inmediatamente si decode no está soportado
+                    // Fallback (navegadores antiguos): La decodificación ocurre síncronamente 
+                    // en el evento 'onload', PERO la resolución de la Promise se aplaza 
+                    // a requestIdleCallback/setTimeout(0) para minimizar el impacto en el frame rate.
                     resolve(fullUrl);
                 }
             };
 
-            // Priorizar requestIdleCallback si está disponible, sino usar setTimeout
+            // APLAZAR LA EJECUCIÓN: Envuelve la lógica de decodificación/resolución
+            // para que se ejecute solo cuando el navegador esté inactivo,
+            // garantizando que no detenga frames.
             if ('requestIdleCallback' in window) {
                 requestIdleCallback(decodeAction);
             } else {
-                setTimeout(decodeAction, 0);
+                setTimeout(decodeAction, 0); // Mejor que nada
             }
         };
+        
         img.onerror = (e) => {
-            console.warn(`Error al cargar el recurso: ${fullUrl}`);
-            resolve(fullUrl); // Resolvemos en error para que Promise.all no falle por 1 recurso
+            // Manejo de fallos de red (mal internet) de forma NO BLOQUEANTE
+            console.warn(`Error al cargar el recurso (red): ${fullUrl}`);
+            resolve(fullUrl); // Resolvemos para que Promise.all continúe.
         };
+        
+        // La descarga es asíncrona (no bloquea)
         img.src = fullUrl;
     });
 };
 
 /**
  * Precarga todos los recursos (imágenes de sistema y fondos) usando la decodificación optimizada.
+ * Esta función es completamente ASÍNCRONA.
  */
 const preloadAllResources = () => {
-    // Verificar que 'menuItems' esté disponible (viene de data.js)
     if (typeof menuItems === 'undefined' || !Array.isArray(menuItems)) {
         console.warn("Precarga: 'menuItems' no está disponible. Saltando.");
         return;
@@ -80,13 +93,9 @@ const preloadAllResources = () => {
     const loadPromises = [];
 
     menuItems.forEach(systemName => {
-        // Precarga de Fondo (JPG)
-        const bgUrl = BACKGROUND_DIR + systemName + BACKGROUND_EXT;
-        loadPromises.push(loadResourceOptimized(bgUrl));
-
-        // Precarga de Imagen de Sistema (SVG)
-        const imageUrl = IMAGE_DIR + systemName + IMAGE_EXT;
-        loadPromises.push(loadResourceOptimized(imageUrl));
+        // Precarga de Fondo (JPG) y Sistema (SVG)
+        loadPromises.push(loadResourceOptimized(BACKGROUND_DIR + systemName + BACKGROUND_EXT));
+        loadPromises.push(loadResourceOptimized(IMAGE_DIR + systemName + IMAGE_EXT));
     });
 
     console.log(`[PRECARGA] Iniciando precarga y decodificación de ${loadPromises.length} recursos...`);
@@ -101,7 +110,6 @@ const preloadAllResources = () => {
         });
 };
 
-// **LLAMADA INMEDIATA A LA PRECARGA**
 preloadAllResources();
 
 /**
@@ -111,52 +119,51 @@ preloadAllResources();
 const abrirModal = (systemName) => {
     if (window.inputLock || !modalOverlay) return;
 
-    try {
-        window.inputLock = true;
-        console.log(`-> Función abrirModal() llamada para: ${systemName}`);
+    // Bloqueo de input
+    window.inputLock = true;
+    console.log(`-> Función abrirModal() llamada para: ${systemName}`);
 
-        const imageUrl = IMAGE_DIR + systemName + IMAGE_EXT;
-        const bgUrl = BACKGROUND_DIR + systemName + BACKGROUND_EXT;
-        const formattedName = systemName.replace(/-/g, ' ').toUpperCase();
+    const imageUrl = IMAGE_DIR + systemName + IMAGE_EXT;
+    const bgUrl = BACKGROUND_DIR + systemName + BACKGROUND_EXT;
+    const formattedName = systemName.replace(/-/g, ' ').toUpperCase();
+    
+    // ================================================================
+    // 💡 OPTIMIZACIÓN: Aplazar el Reflow forzado y el Renderizado inicial
+    // ================================================================
+    
+    // 1. Actualizar contenido (síncrono y rápido)
+    modalImage.src = imageUrl;
+    modalImage.alt = systemName;
+    modalTitle.textContent = formattedName;
+    modalHeader.style.setProperty('--bg-url', `url('${bgUrl}')`);
 
-        // 1. Mostrar y animar la superposición
+    // 2. Carga de datos y renderizado del grid (ASÍNCRONO - en game-data-loader.js)
+    // Esto es el trabajo más pesado y ya es asíncrono.
+    window.loadGameItems(systemName, (items) => {
+        console.log(`[CARGA ASÍNCRONA] Lista cargada y renderizada para ${systemName}.`);
+        window.renderGrid(items, systemName, contentGridContainer, modalTitle);
+    });
+
+    // 3. Inicio del centrado periódico
+    if (centeringCheckIntervalId) {
+        clearInterval(centeringCheckIntervalId);
+    }
+    centeringCheckIntervalId = setInterval(window.checkAndRecenterGridSelection, 500);
+    window.isCenteringActive = true;
+    
+    // 4. Mostrar y animar la superposición en el siguiente frame (para reducir el lag inicial)
+    requestAnimationFrame(() => {
         modalOverlay.style.display = 'flex';
-        void modalOverlay.offsetWidth; // Forzar reflow para la transición CSS
+        // Forzar reflow para la transición CSS AHORA que el contenido ya fue actualizado
+        void modalOverlay.offsetWidth; 
         modalOverlay.classList.add('open');
         document.body.setAttribute('data-modal-open', 'true');
-
-        // 2. Actualizar contenido (ya precargado)
-        modalImage.src = imageUrl;
-        modalImage.alt = systemName;
-        modalTitle.textContent = formattedName;
-        modalHeader.style.setProperty('--bg-url', `url('${bgUrl}')`);
-
-        // 3. Carga de datos y renderizado del grid
-        window.loadGameItems(systemName, (items) => {
-            console.log(`[CARGA ASÍNCRONA] Lista cargada y renderizada para ${systemName}.`);
-            window.renderGrid(items, systemName, contentGridContainer, modalTitle);
-        });
-
-        // 4. Inicio del centrado periódico
-        if (centeringCheckIntervalId) {
-            clearInterval(centeringCheckIntervalId);
-        }
-        centeringCheckIntervalId = setInterval(window.checkAndRecenterGridSelection, 500);
-        window.isCenteringActive = true;
 
         // 5. Desbloqueo de input después de la transición
         setTimeout(() => {
             window.inputLock = false;
         }, INPUT_LOCK_DELAY);
-
-    } catch (error) {
-        console.error("[ERROR CRÍTICO SÍNCRONO] 🚨 La función abrirModal() falló:", error);
-        if (modalOverlay) {
-            modalOverlay.style.display = 'none';
-            modalOverlay.classList.remove('open');
-        }
-        window.inputLock = false;
-    }
+    });
 };
 
 /**
