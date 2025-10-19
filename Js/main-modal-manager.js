@@ -37,9 +37,13 @@ let contentGridContainer;
 const loadResourceOptimized = (fullUrl) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
+        
+        // 1. Manejo de la carga exitosa
         img.onload = () => {
             // ================================================================
             // 💡 OPTIMIZACIÓN CRÍTICA: Decodificación y Fallback en "Idle Time"
+            // Se asegura de que la decodificación (heavy CPU operation)
+            // se ejecute SÓLO cuando el navegador está inactivo.
             // ================================================================
             const decodeAction = () => {
                 if ('decode' in img) {
@@ -53,29 +57,26 @@ const loadResourceOptimized = (fullUrl) => {
                         });
                 } else {
                     // Fallback (navegadores antiguos): La decodificación ocurre síncronamente 
-                    // en el evento 'onload', PERO la resolución de la Promise se aplaza 
-                    // a requestIdleCallback/setTimeout(0) para minimizar el impacto en el frame rate.
+                    // en el evento 'onload', pero la resolución de la Promise se aplaza.
                     resolve(fullUrl);
                 }
             };
 
-            // APLAZAR LA EJECUCIÓN: Envuelve la lógica de decodificación/resolución
-            // para que se ejecute solo cuando el navegador esté inactivo,
-            // garantizando que no detenga frames.
+            // APLAZAR LA EJECUCIÓN
             if ('requestIdleCallback' in window) {
                 requestIdleCallback(decodeAction);
             } else {
-                setTimeout(decodeAction, 0); // Mejor que nada
+                setTimeout(decodeAction, 0); // Mejor que nada (después de 'onload')
             }
         };
         
+        // 2. Manejo de fallos de red (mal internet) de forma NO BLOQUEANTE
         img.onerror = (e) => {
-            // Manejo de fallos de red (mal internet) de forma NO BLOQUEANTE
-            console.warn(`Error al cargar el recurso (red): ${fullUrl}`);
+            console.warn(`Error al cargar el recurso (red): ${fullUrl}. Resolviendo en fallback.`);
             resolve(fullUrl); // Resolvemos para que Promise.all continúe.
         };
         
-        // La descarga es asíncrona (no bloquea)
+        // La descarga comienza aquí (asíncrona por naturaleza)
         img.src = fullUrl;
     });
 };
@@ -101,6 +102,8 @@ const preloadAllResources = () => {
     console.log(`[PRECARGA] Iniciando precarga y decodificación de ${loadPromises.length} recursos...`);
 
     // Esperar a que todas las precargas finalicen
+    // La promesa resuelve cuando se ha intentado la carga y decodificación,
+    // garantizando que las operaciones de CPU no detengan la interfaz.
     Promise.all(loadPromises)
         .then(() => {
             console.log("[PRECARGA] Todos los recursos han intentado cargarse y decodificarse (completado).");
@@ -110,6 +113,7 @@ const preloadAllResources = () => {
         });
 };
 
+// La precarga se inicia inmediatamente al cargar el script.
 preloadAllResources();
 
 /**
