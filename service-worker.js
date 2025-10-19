@@ -1,30 +1,31 @@
 const CACHE_NAME = 'retrostation-cache-v1';
 
 // Lista de todos los archivos estáticos de tu aplicación para caché inicial
+// 🚨 CRÍTICO: Se eliminaron las barras iniciales '/' para asegurar compatibilidad con GitHub Pages.
 const urlsToCache = [
-    '/',
-    '/index.html',
-    '/main-menu.css',
-    '/grid-menu.css',
-    '/game-details.css',
-    // Archivos JavaScript
-    '/Js/data.js',
-    '/Js/utils.js',
-    '/Js/game-data-loader.js',
-    '/Js/main-modal-manager.js',
-    '/Js/game-grid-nav.js',
-    '/Js/mediafire-downloader.js',
-    '/Js/game-details-logic.js',
-    '/Js/ui-logic.js',
-    // Íconos e imágenes
-    '/Icons/back.svg',
-    '/Icons/loading.svg',
-    '/Icons/placeholder.svg',
-    '/Icons/favicon.png',
-    '/Icons/preview.jpg',
+    'index.html', // NOTA: 'index.html' en lugar de '/'
+    'main-menu.css',
+    'grid-menu.css',
+    'game-details.css',
+    // Archivos JavaScript (la ruta de la carpeta 'Js/' se mantiene, pero sin el '/' inicial)
+    'Js/data.js',
+    'Js/utils.js',
+    'Js/game-data-loader.js',
+    'Js/main-modal-manager.js',
+    'Js/game-grid-nav.js',
+    'Js/mediafire-downloader.js',
+    'Js/game-details-logic.js',
+    'Js/ui-logic.js',
+    // Íconos e imágenes (la ruta de la carpeta 'Icons/' se mantiene, pero sin el '/' inicial)
+    'Icons/back.svg',
+    'Icons/loading.svg',
+    // ❌ IMPORTANTE: Si no tienes Icons/placeholder.svg, asegúrate de que tampoco esté aquí
+    // 'Icons/placeholder.svg', 
+    'Icons/favicon.png',
+    'Icons/preview.jpg',
     // Íconos PWA
-    '/Icons/pwa-icon-192.png',
-    '/Icons/pwa-icon-512.png',
+    'Icons/pwa-icon-192.png',
+    'Icons/pwa-icon-512.png',
 ];
 
 // Evento 1: Instalación (almacenar archivos estáticos en caché)
@@ -34,9 +35,15 @@ self.addEventListener('install', event => {
       .then(cache => {
         console.log('Service Worker: Cache Abierta');
         // Agrega todos los archivos a la caché
+        // Si addAll falla, el Service Worker no se instalará.
         return cache.addAll(urlsToCache);
       })
-      .catch(err => console.error('Error al cachear archivos:', err))
+      .catch(err => {
+        // MUY IMPORTANTE: Este catch capturará el error "Request failed"
+        console.error('Error CRÍTICO al cachear archivos. Revise cada ruta:', err);
+        // Opcional: Para ver qué archivo falló, puedes registrar la lista completa
+        console.error('Lista de archivos que fallaron al intentar cachear:', urlsToCache);
+      })
   );
 });
 
