@@ -427,19 +427,22 @@ class RuedaDinamica {
         if (!clickedOption) return;
 
         const targetIndex = parseInt(clickedOption.dataset.index, 10);
+        const previousIndex = this.indiceActual; // Guardar el índice actual antes de cambiarlo
 
-        if (targetIndex === this.indiceActual) {
+        if (targetIndex === previousIndex) {
             this.callbacks.abrirModal(this.menuItems[this.indiceActual]);
             return;
         }
 
         this.isRotatingFromClick = true; // Bloqueo temporal
 
+        // ✅ CORRECCIÓN CLAVE: Actualizar el índice después de calcular la diferencia.
         this.indiceActual = targetIndex;
         let diferenciaPasos = 0;
 
         if (!this.isMobileView) {
-            diferenciaPasos = targetIndex - this.indiceActual;
+            // Se calcula la diferencia usando el índice anterior
+            diferenciaPasos = targetIndex - previousIndex;
 
             // Cálculo para la ruta de rotación más corta
             if (Math.abs(diferenciaPasos) > this.halfOptions) {
@@ -448,7 +451,7 @@ class RuedaDinamica {
                     : diferenciaPasos + this.totalOpciones;
             }
             
-            // Aplicar la rotación directamente
+            // Aplicar la rotación
             this.rotacionObjetivoRueda += (diferenciaPasos * -1) * this.anguloPorOpcion;
             this._applyTargetRotation(); 
             // NOTA: _applyTargetRotation ya gestiona el reset de this.isRotatingFromClick.
