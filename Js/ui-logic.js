@@ -613,7 +613,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // 🚀 REGISTRO DEL SERVICE WORKER (Para funcionalidades PWA)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
+    // Usamos './service-worker.js' para asegurar que busque el archivo
+    // en el directorio actual del index.html, lo cual es compatible con subdirectorios (repositorios de GH Pages).
+    navigator.serviceWorker.register('./service-worker.js') 
       .then(registration => {
         console.log('ServiceWorker registrado con éxito. Alcance:', registration.scope);
       })
