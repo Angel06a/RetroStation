@@ -1,15 +1,25 @@
 // =========================================================================
 // mediafire-downloader.js: Lógica de Descarga Directa y Manejo de Carpetas
 // MODIFICADO: Funciones de manejo de carpetas hechas globales para la secuencia.
-// OPTIMIZADO: Levemente minificado para reducir el peso.
 // =========================================================================
 
-const linkCache = new Map();
+const linkCache = new Map(); 
 const folderCache = new Map();
 
-function isMobile() {return /Mobi/i.test(navigator.userAgent) || /Android/i.test(navigator.userAgent);}
+// --- Utilidades Básicas ---
 
+/**
+ * Detecta si el agente de usuario parece ser un dispositivo móvil.
+ */
+function isMobile() {
+    return /Mobi/i.test(navigator.userAgent) || /Android/i.test(navigator.userAgent);
+}
+
+/**
+ * Inicia la descarga o abre el enlace directo.
+ */
 function triggerDownload(url) {
+    // Intentamos iniciar la descarga en la pestaña actual (igual para PC y Móvil).
     const a = document.createElement('a');
     a.href = url;
     a.download = '';
@@ -19,6 +29,9 @@ function triggerDownload(url) {
     document.body.removeChild(a);
 }
 
+/**
+ * Función de respaldo para abrir la URL en una nueva pestaña.
+ */
 function openCleanPopup(url) {
     const a = document.createElement('a');
     a.href = url;
@@ -27,8 +40,10 @@ function openCleanPopup(url) {
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
+    document.body.removeChild(a); 
 }
+
+// --- Lógica de Extracción y Proxy Robusto ---
 
 function extractFromHTML(html) {
     const patterns = [
@@ -36,7 +51,7 @@ function extractFromHTML(html) {
         new RegExp('href="(https:\\/\\/download[0-9]*\\.mediafire\\.com\\/[^"]*)"'),
         /"download_link".*?"(https:[^"]+)"/,
     ];
-
+    
     for (let pattern of patterns) {
         const match = html.match(pattern);
         if (match && match[1]) {
@@ -48,15 +63,18 @@ function extractFromHTML(html) {
     return null;
 }
 
+/**
+ * Fetch con un límite de tiempo (timeout) de 15 segundos para robustez en móvil.
+ */
 async function fetchWithTimeout(resource, options = {}) {
-    const { timeout = 15000 } = options;
+    const { timeout = 15000 } = options; 
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
 
     try {
         const response = await fetch(resource, {
             ...options,
-            signal: controller.signal
+            signal: controller.signal  
         });
         clearTimeout(id);
         return response;
@@ -71,28 +89,30 @@ async function method2_externalServices(mediafireUrl) {
         `https://corsproxy.io/?${encodeURIComponent(mediafireUrl)}`,
         `https://api.allorigins.win/raw?url=${encodeURIComponent(mediafireUrl)}`,
     ];
-
+    
     for (let service of services) {
         try {
             const response = await fetchWithTimeout(service, { timeout: 15000 });
-
+            
             if (response.ok) {
                 let html = await response.text();
-
+                
                 if (service.includes('allorigins.win') && html.startsWith('{"contents":')) {
                      const data = JSON.parse(html);
                      html = data.contents;
                 }
-
+                
                 const directLink = extractFromHTML(html);
                 if (directLink) return directLink;
             }
         } catch (error) {
-            continue;
+            continue; 
         }
     }
     return null;
 }
+
+// --- Lógica de Carpetas ---
 
 function extractFolderKey(folderUrl) {
     const matches = folderUrl.match(/mediafire\.com\/folder\/([a-zA-Z0-9]+)/);
@@ -102,8 +122,8 @@ function extractFolderKey(folderUrl) {
 async function getFolderViaAPI(folderKey) {
     try {
         const apiUrl = `https://www.mediafire.com/api/1.5/folder/get_content.php?r=qtg&content_type=files&filter=all&order_by=name&order_direction=asc&chunk=1&version=1.5&folder_key=${folderKey}&response_format=json`;
-
-        const response = await fetch(apiUrl);
+        
+        const response = await fetch(apiUrl); 
         if (response.ok) {
             const data = await response.json();
             if (data.response && data.response.folder_content && data.response.folder_content.files) {
@@ -124,8 +144,8 @@ async function getFolderViaScraping(folderKey) {
     try {
         const folderUrl = `https://www.mediafire.com/folder/${folderKey}`;
         const service = `https://api.allorigins.win/raw?url=${encodeURIComponent(folderUrl)}`;
-
-        const response = await fetchWithTimeout(service, { timeout: 15000 });
+        
+        const response = await fetchWithTimeout(service, { timeout: 15000 }); 
         if (response.ok) {
             const html = await response.text();
             return parseFolderHTML(html, folderKey);
@@ -140,12 +160,12 @@ function parseFolderHTML(html, folderKey) {
     const files = [];
     const dataKeyPattern = /data-key="([^"]+)"/g;
     let match;
-
+    
     while ((match = dataKeyPattern.exec(html)) !== null) {
         const key = match[1];
         const namePattern = new RegExp(`data-key="${key}"[^>]*data-filename="([^"]+)"`);
         const nameMatch = html.match(namePattern);
-
+        
         if (nameMatch && nameMatch[1]) {
             files.push({
                 name: nameMatch[1],
@@ -154,10 +174,10 @@ function parseFolderHTML(html, folderKey) {
             });
         }
     }
-
+    
     const jsonPattern = /window\.oPageData\s*=\s*({[^;]+});/;
     const jsonMatch = html.match(jsonPattern);
-
+    
     if (jsonMatch) {
         try {
             const pageData = JSON.parse(jsonMatch[1]);
@@ -172,12 +192,14 @@ function parseFolderHTML(html, folderKey) {
                     }
                 });
             }
-        } catch (e) {/* Error al parsear JSON */}
+        } catch (e) {
+            // Error al parsear JSON
+        }
     }
-
+    
     const uniqueFiles = [];
     const seenKeys = new Set();
-
+    
     for (const file of files) {
         if (file.key && !seenKeys.has(file.key)) {
             seenKeys.add(file.key);
@@ -191,13 +213,14 @@ async function getFolderContents(folderKey) {
     if (folderCache.has(folderKey)) {
         return folderCache.get(folderKey);
     }
-
+    
     console.log('Buscando archivos para carpeta:', folderKey);
-
+    
     let files = [];
     try {
         files = await getFolderViaAPI(folderKey);
         if (files.length === 0) files = await getFolderViaScraping(folderKey);
+        // Si tienes un método de servicio externo, agrégalo aquí
     } catch (error) {
         console.log('Error al obtener contenido de carpeta, usando el método alternativo si es necesario.');
     }
@@ -208,55 +231,67 @@ async function getFolderContents(folderKey) {
     return files;
 }
 
+// --- Funciones de Pre-carga ---
+
+/**
+ * Obtiene el enlace de descarga directo de MediaFire para archivos individuales.
+ * NO INICIA la descarga.
+ */
 async function getDirectDownloadLink(mediafireUrl) {
     if (mediafireUrl.includes('/folder/')) {
-        return null;
+        return null; 
     }
     try {
         const directUrl = await method2_externalServices(mediafireUrl);
-        return directUrl;
+        return directUrl; 
     } catch (e) {
         console.error("Error al precargar link:", e);
         return null;
     }
 }
 
+
+// --- Función Principal (Fallback para archivos individuales sin pre-carga) ---
+
 async function handleGameDownload(mediafireUrl, buttonElement) {
-    if (!mediafireUrl || mediafireUrl.includes('/folder/')) return;
+    
+    if (!mediafireUrl || mediafireUrl.includes('/folder/')) return; // Solo maneja archivos individuales ahora
 
     buttonElement.disabled = true;
     const originalText = buttonElement.textContent;
-
+    
     const updateButtonStatus = (message) => {
         buttonElement.textContent = message;
     };
 
     updateButtonStatus('Procesando (Asíncrono)...');
 
+    // Lógica de Archivo Individual (ASÍNCRONO - método antiguo/fallback)
     try {
         updateButtonStatus('Obteniendo enlace directo...');
         const directUrl = await method2_externalServices(mediafireUrl);
-
+        
         if (directUrl) {
             triggerDownload(directUrl);
             updateButtonStatus('Descargando...');
         } else {
             updateButtonStatus('Abriendo link (FALLBACK)');
-            openCleanPopup(mediafireUrl);
+            openCleanPopup(mediafireUrl); 
         }
     } catch(e) {
         updateButtonStatus('Error. Abriendo link...');
         openCleanPopup(mediafireUrl);
     }
-
+    
     setTimeout(() => {
         buttonElement.textContent = originalText;
         buttonElement.disabled = false;
-    }, 3000);
+    }, 3000); 
 }
 
+// Hacemos las funciones principales globalmente accesibles para game-details-logic.js
 window.handleGameDownload = handleGameDownload;
-window.getDirectDownloadLink = getDirectDownloadLink;
-window.triggerDownload = triggerDownload;
-window.getFolderContents = getFolderContents;
-window.extractFolderKey = extractFolderKey;
+window.getDirectDownloadLink = getDirectDownloadLink; 
+window.triggerDownload = triggerDownload; 
+window.getFolderContents = getFolderContents; // Nueva global
+window.extractFolderKey = extractFolderKey; // Nueva global
