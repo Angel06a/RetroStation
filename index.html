@@ -1,9 +1,12 @@
-<!DOCTYPE html><html lang="es"><head>
+<!DOCTYPE html>
+<html lang="es">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>RetroStation</title>
     <meta name="description" content="RetroStation, una interfaz de menú moderna y rápida para emuladores y juegos retro. Explora, navega y descarga tus clásicos favoritos.">
     <link rel="canonical" href="https://angel06a.github.io/RetroStation/">
+    
     <meta property="og:title" content="RetroStation: Menú de Juegos Retro">
     <meta property="og:description" content="Una interfaz de menú moderna y rápida para emuladores y juegos retro.">
     <meta property="og:url" content="https://angel06a.github.io/RetroStation/">
@@ -13,13 +16,21 @@
     <meta name="twitter:title" content="RetroStation: Menú de Juegos Retro">
     <meta name="twitter:description" content="Una interfaz de menú moderna y rápida para emuladores y juegos retro.">
     <meta name="theme-color" content="#343a40"> 
+    
     <link rel="icon" href="Icons/favicon.png" type="image/png">
+    
+    <link rel="manifest" href="manifest.json">
+    
     <link rel="preconnect" href="https://www.mediafire.com" crossorigin>
+
     <link rel="stylesheet" href="main-menu.css">
+
     <link rel="preload" href="grid-menu.css" as="style" onload="this.rel='stylesheet'">
     <link rel="preload" href="game-details.css" as="style" onload="this.rel='stylesheet'">
+    
     <link rel="preload" href="Icons/back.svg" as="image">
     <link rel="prefetch" href="Icons/loading.svg" as="image">
+    
     <link rel="preload" href="Js/data.js" as="script">
     <link rel="preload" href="Js/utils.js" as="script">
     <link rel="preload" href="Js/game-data-loader.js" as="script">
@@ -28,7 +39,9 @@
     <link rel="preload" href="Js/mediafire-downloader.js" as="script">
     <link rel="preload" href="Js/game-details-logic.js" as="script">
     <link rel="preload" href="Js/ui-logic.js" as="script">
-</head><body data-modal-open="false">
+
+    </head>
+<body data-modal-open="false">
     <div id="background-container"></div>
     <main id="rueda" class="rueda" role="navigation" tabindex="0" aria-label="Menú principal de sistemas de juegos"></main>
     <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-hidden="true">
@@ -61,6 +74,7 @@
             </div>
         </div>
     </div>
+
     <script src="Js/data.js" defer></script>
     <script src="Js/utils.js" defer></script>
     <script src="Js/game-data-loader.js" defer></script>
@@ -69,10 +83,26 @@
     <script src="Js/mediafire-downloader.js" defer></script>
     <script src="Js/game-details-logic.js" defer></script>
     <script src="Js/ui-logic.js" defer></script>
+    
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed: ', error);
+                    });
+            });
+        }
+    </script>
+    
     <noscript>
         <style>
             .rueda, .modal-overlay, .game-details-overlay { display: none; }
             body::before { content: "Esta aplicación requiere JavaScript para funcionar."; display: block; padding: 20px; text-align: center; color: white; background: red; }
         </style>
     </noscript>
-</body></html>
+</body>
+</html>
