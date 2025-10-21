@@ -1,29 +1,21 @@
 {
-  "name": "RetroStation",
-  "short_name": "RetroStation",
-  "description": "Explora, navega y descarga tus clásicos retro favoritos.",
-  "start_url": "./index.html",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#1a1a1a",
-  "theme_color": "#343a40",
-  "icons": [
-    {
-      "src": "Icons/favicon.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "Icons/favicon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    },
-    {
-      "src": "Icons/favicon.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
-  ],
-  "orientation": "portrait"
+    "name": "RetroStation",
+    "short_name": "RetroStation",
+    "description": "Una interfaz de menú moderna y rápida para emuladores y juegos retro.",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#343a40",
+    "theme_color": "#343a40",
+    "icons": [
+        {
+            "src": "Icons/favicon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "Icons/favicon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
 }
