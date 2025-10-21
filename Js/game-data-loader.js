@@ -1,5 +1,5 @@
 // =========================================================================
-// game-data-loader.js: Carga Asíncrona de Datos (OPTIMIZADO PARA COMPATIBILIDAD MÓVIL CON BLOB WORKER)
+// game-data-loader.js: Carga Asíncrona de Datos (OPTIMIZADO V2 CON WORKER BLOB REVISADO)
 // =========================================================================
 
 (function () {
@@ -10,19 +10,19 @@
     const A_RATIO = '16/9';
     const G_VAR_N = `currentGameListString`;
 
-    // --- CÓDIGO DEL WORKER INLINADO EN STRING (para máxima compatibilidad) ---
+    // --- CÓDIGO DEL WORKER INLINADO EN STRING (Escaping revisado) ---
+    // Usamos doble backslash (\\) para que el Worker reciba un solo backslash (\)
     const workerCode = `
-        // Este código se ejecuta en el hilo del Worker.
         function parseHyphenList(rawText) {
             if (!rawText) return [];
 
             const items = [];
+            // Regex con backslashes escapados: \\s* -> \s* en el Worker
             const urlRegex = /"([^"]*)"\\s*$/; 
-            const lines = rawText.split('\\n');
+            const lines = rawText.split('\\n'); // \n escapado: \\n -> \n en el Worker
             
             for (const line of lines) {
                 const trimmedLine = line.trim();
-
                 if (!trimmedLine.startsWith('-')) continue;
 
                 let content = trimmedLine.substring(1).trim(); 
@@ -44,35 +44,51 @@
             return items;
         }
 
+        // Manejador de errores dentro del Worker (para capturar errores de sintaxis o ejecución)
+        self.onerror = (e) => {
+            console.error('Worker Error:', e.message, e.filename, e.lineno);
+        };
+
         self.onmessage = function(event) {
             const { type, rawText } = event.data;
 
             if (type === 'PARSE_GAME_DATA') {
-                const parsedItems = parseHyphenList(rawText); 
-                self.postMessage({
-                    type: 'PARSE_COMPLETE',
-                    items: parsedItems
-                });
+                try {
+                    const parsedItems = parseHyphenList(rawText); 
+                    self.postMessage({
+                        type: 'PARSE_COMPLETE',
+                        items: parsedItems
+                    });
+                } catch (error) {
+                    console.error('Worker runtime error during parsing:', error);
+                }
             }
         };
     `;
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------
 
 
     // --- INICIALIZACIÓN DEL WEB WORKER (vía Blob/URL) ---
     let dataParserWorker = null;
     if (window.Worker) {
         try {
-            // 1. Crea un Blob con el código del Worker
             const blob = new Blob([workerCode], { type: 'application/javascript' });
-            // 2. Crea una URL de Objeto para el Blob
             const workerUrl = URL.createObjectURL(blob);
-            // 3. Inicializa el Worker
             dataParserWorker = new Worker(workerUrl); 
+            console.log('✅ Worker inicializado con éxito usando Blob.');
+            
+            // Captura errores de comunicación o de inicio del Worker
+            dataParserWorker.onerror = (e) => {
+                console.error('🚨 Fallo de inicialización del Worker (Hilo Principal):', e);
+                // Si falla en tiempo de ejecución, deshabilitamos el Worker para forzar el fallback
+                dataParserWorker = null; 
+            };
         } catch (e) {
-            console.error('⚠️ CRÍTICO: Fallo al inicializar Worker usando Blob.', e);
-            // dataParserWorker permanece en null, lo que forzará el fallback más abajo.
+            console.error('❌ Fallo CRÍTICO al inicializar Worker (Blob/URL).', e);
+            dataParserWorker = null;
         }
+    } else {
+        console.warn('❌ window.Worker no está disponible en este navegador.');
     }
     // -----------------------------------------------------------------
 
@@ -94,29 +110,29 @@
 
             if (typeof rawText === 'string') {
                 if (dataParserWorker) {
-                    // **USO DEL WORKER**: Envía el texto crudo para procesamiento asíncrono
+                    // **RUTA PRINCIPAL: WEB WORKER**
                     dataParserWorker.onmessage = function(event) {
                         if (event.data.type === 'PARSE_COMPLETE') {
+                            console.log('➡️ Datos recibidos del Worker. UI fluida.');
                             items = event.data.items;
                             completeProcessing(items);
-                            // Limpia el onmessage después de su uso 
                             dataParserWorker.onmessage = null; 
                         }
                     };
                     dataParserWorker.postMessage({ type: 'PARSE_GAME_DATA', rawText });
-                    return; // Salimos. La ejecución se reanudará en dataParserWorker.onmessage
+                    return; 
                 } else if (window.parseHyphenList) {
-                    // FALLBACK (Si Worker no se pudo crear, usamos la función síncrona, debe ser una función global)
-                    console.warn(`[ADVERTENCIA] Fallback al hilo principal.`);
+                    // **RUTA SECUNDARIA: FALLBACK SÍNCRONO**
+                    console.warn(`⚠️ Fallback al hilo principal. (Posible lag al cargar lista grande).`);
                     items = window.parseHyphenList(rawText);
                 } else {
-                     console.warn(`[ADVERTENCIA] La variable global ${G_VAR_N} no se encontró o no hay método de parseo.`);
+                     console.error(`🚨 Fallo total: No hay Worker ni función de parseo global.`);
                 }
             } else {
-                 console.warn(`[ADVERTENCIA] La variable global ${G_VAR_N} no se encontró o no hay método de parseo.`);
+                 console.warn(`[ADVERTENCIA] La variable global ${G_VAR_N} no se encontró.`);
             }
             
-            // Si el Worker no se usó (por fallback), completamos el procesamiento aquí
+            // Si el Worker falló o no se usó, completamos el procesamiento aquí
             completeProcessing(items);
         };
 
