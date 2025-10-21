@@ -25,8 +25,8 @@
 
     <link rel="stylesheet" href="main-menu.css">
 
-    <link rel="preload" href="grid-menu.css" as="style" onload="this.rel='stylesheet'"> 
-    <link rel="preload" href="game-details.css" as="style" onload="this.rel='stylesheet'"> 
+    <link rel="preload" href="grid-menu.css" as="style" onload="this.rel='stylesheet'">
+    <link rel="preload" href="game-details.css" as="style" onload="this.rel='stylesheet'">
     
     <link rel="preload" href="Icons/back.svg" as="image">
     <link rel="prefetch" href="Icons/loading.svg" as="image">
@@ -39,7 +39,7 @@
     <link rel="preload" href="Js/mediafire-downloader.js" as="script">
     <link rel="preload" href="Js/game-details-logic.js" as="script">
     <link rel="preload" href="Js/ui-logic.js" as="script">
-    
+
     </head>
 <body data-modal-open="false">
     <div id="background-container"></div>
@@ -87,7 +87,6 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                // Notar: 'data-parser-worker.js' ya está cacheado por sw.js
                 navigator.serviceWorker.register('./sw.js')
                     .then(registration => {
                         console.log('ServiceWorker registration successful with scope: ', registration.scope);
