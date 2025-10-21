@@ -4,17 +4,18 @@
 
 /**
  * Carga (fetch) y decodifica una imagen.
- * NOTA: Usar fetch() en el Worker es más robusto para la carga que new Image().
- * @param {string} fullUrl - La URL completa del recurso a cargar.
- * @returns {Promise<string>} Una promesa que se resuelve con la URL si tiene éxito, o con un error.
+ * @param {string} fullUrl - La URL completa del recurso a cargar (DEBE SER ABSOLUTA).
+ * @returns {Promise<string>} Una promesa que se resuelve con la URL si tiene éxito.
  */
 function decodeImage(fullUrl) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         // 1. Usar fetch para cargar el recurso
         fetch(fullUrl)
             .then(response => {
                 if (!response.ok) {
-                    throw new Error(`[WORKER] Error de red: ${response.statusText}`);
+                    // Mejorar el mensaje de error: usar statusText o status si está vacío
+                    const statusText = response.statusText || `HTTP Status ${response.status}`;
+                    throw new Error(`[WORKER] Error de red: ${statusText}`);
                 }
                 return response.blob();
             })
@@ -46,7 +47,6 @@ function decodeImage(fullUrl) {
                 img.onload = () => decodeAndResolve();
                 
                 img.onerror = () => {
-                    // Si falla la carga del Blob en el elemento Image (raro)
                     console.error(`[WORKER] Error al cargar ObjectURL en Image: ${fullUrl}`);
                     fallbackResolve();
                 };
