@@ -40,15 +40,6 @@ const criticalUrlsToCache = [
     ...systemIcons
 ];
 
-// 2. Archivos No Críticos (Imágenes Grandes) - Cacheo en segundo plano
-// Incluye el fondo por defecto y todos los fondos de sistemas
-const nonCriticalImageCache = [
-    './Fondos/psx.jpg', // Fondo por defecto
-    // === NUEVOS FONDOS DE SISTEMAS AÑADIDOS AL CACHE NO CRÍTICO (JPG) ===
-    ...systemBackgrounds
-];
-
-
 // Instalación: Divide el cacheo en dos tareas asíncronas.
 self.addEventListener('install', event => {
     // 1. Tarea Principal (Crítica): Debe completarse para instalar el SW.
@@ -129,3 +120,4 @@ self.addEventListener('fetch', event => {
         fetch(event.request).catch(() => caches.match(event.request))
     );
 });
+
