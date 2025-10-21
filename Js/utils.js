@@ -24,13 +24,11 @@ function updateViewportCache() {
 updateViewportCache();
 
 // --- 1. PARSEO DE DATOS ---
-// **ELIMINADO: La función parseHyphenList fue movida a Js/worker-data-parser.js para Web Worker.**
-// **ELIMINADO: La función parseHyphenList fue movida a Js/worker-data-parser.js para Web Worker.**
+// **VERIFICACIÓN: La función parseHyphenList debe estar AUSENTE en este archivo.**
 
 // --- 2. CÁLCULO DE DIMENSIONES ---
 
 function calculateWheelMetrics(anguloPorOpcion, totalOpciones) {
-    // ... (El cuerpo de la función sigue igual) ...
     const windowH = cachedViewportHeight;
     const windowW = cachedViewportWidth;
 
@@ -45,17 +43,15 @@ function calculateWheelMetrics(anguloPorOpcion, totalOpciones) {
     if (Math.abs(angleRad) > 1e-6) {
         C = (A * Math.sin(angleRad) - B * Math.cos(angleRad)) / Math.cos(angleRad) + B;
     } else {
-        C = B; // Caso para ángulo cero o muy cercano a cero
+        C = B; 
     }
     
-    // Calcula el radio necesario
     const requiredRadius = (A + C) / Math.sin(angleRad);
     let currentRadius = requiredRadius * WHEEL_CONSTANTS.TARGET_GAP_RATIO; 
 
     const maxRadiusBasedOnWidth = (windowW / 2) - (itemWidth * WHEEL_CONSTANTS.EXTRA_MARGIN_RATIO);
     currentRadius = Math.min(currentRadius, maxRadiusBasedOnWidth);
 
-    // Asegura un radio mínimo (opcional, pero buena práctica)
     const minRadius = windowH * WHEEL_CONSTANTS.MIN_RADIUS_RATIO;
     currentRadius = Math.max(currentRadius, minRadius);
 
@@ -66,7 +62,7 @@ function calculateWheelMetrics(anguloPorOpcion, totalOpciones) {
 }
 
 function calculateAndApplyDimensions(rueda, opciones, initialAngles, anguloPorOpcion, totalOpciones) {
-    // ... (El cuerpo de la función sigue igual) ...
+    
     const { 
         itemHeight, itemWidth, currentRadius: R, 
         ruedaTamano, posicionLeft 
