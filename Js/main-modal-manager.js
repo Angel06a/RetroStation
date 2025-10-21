@@ -1,5 +1,5 @@
 // =========================================================================
-// main-modal-manager.js: Modificado para delegar la precarga al Worker
+// main-modal-manager.js: Modificado para enviar URL absolutas al Worker
 // =========================================================================
 
 window.inputLock = false;
@@ -14,10 +14,16 @@ const INPUT_LOCK_DELAY = 200;
 
 let modalOverlay, modalHeader, modalImage, modalTitle, contentGridContainer;
 
-// 1. Inicializar el Web Worker para el procesamiento de imágenes
+// 1. OBTENER LA BASE URL: Se usa document.baseURI o location.href 
+// para construir URLs absolutas correctas, esenciales en GitHub Pages.
+// Esto garantiza que la ruta sea https://angel06a.github.io/RetroStation/
+const BASE_URL = document.baseURI || window.location.href;
+const URL_BASE_CLEANED = BASE_URL.endsWith('/') ? BASE_URL : BASE_URL.substring(0, BASE_URL.lastIndexOf('/') + 1);
+
+// 2. Inicializar el Web Worker
 const imageWorker = new Worker('Js/image-worker.js');
 
-// 2. Manejar mensajes del Worker (opcional, solo para feedback)
+// 3. Manejar mensajes del Worker (opcional, solo para feedback)
 imageWorker.onmessage = (e) => {
     if (e.data.status === 'loaded') {
         // console.log(`[PRECARGA WORKER] Decodificado: ${e.data.url}`);
@@ -30,7 +36,7 @@ imageWorker.onerror = (error) => {
     console.error("[PRECARGA WORKER] Error en el Worker de imágenes:", error);
 };
 
-// 3. Función simplificada de precarga: Solo recolecta URLs y las envía al Worker
+// 4. Función de precarga: Ahora construye la URL absoluta
 const preloadAllResources = () => {
     if (typeof menuItems === 'undefined' || !Array.isArray(menuItems)) {
         console.warn("Precarga: 'menuItems' no está disponible. Saltando.");
@@ -38,13 +44,14 @@ const preloadAllResources = () => {
     }
 
     const resourcesToLoad = menuItems.flatMap(systemName => [
-        BACKGROUND_DIR + systemName + BACKGROUND_EXT,
-        IMAGE_DIR + systemName + IMAGE_EXT
+        // Construimos la URL completa usando la base del documento
+        URL_BASE_CLEANED + BACKGROUND_DIR + systemName + BACKGROUND_EXT,
+        URL_BASE_CLEANED + IMAGE_DIR + systemName + IMAGE_EXT
     ]);
 
-    console.log(`[PRECARGA] Iniciando precarga de ${resourcesToLoad.length} recursos en el Worker...`);
+    console.log(`[PRECARGA] Iniciando precarga de ${resourcesToLoad.length} recursos en el Worker con URLs absolutas...`);
     
-    // Enviar el array de URLs al worker
+    // Enviar el array de URLs absolutas al worker
     imageWorker.postMessage({
         type: 'preload',
         urls: resourcesToLoad
@@ -72,6 +79,7 @@ const abrirModal = (systemName) => {
     const formattedName = systemName.replace(/-/g, ' ').toUpperCase();
     
     requestAnimationFrame(() => {
+        // Estas rutas siguen siendo relativas para el CSS/DOM y es correcto.
         modalImage.src = imageUrl;
         modalImage.alt = systemName;
         modalTitle.textContent = formattedName;
