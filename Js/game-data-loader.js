@@ -1,5 +1,5 @@
 // =========================================================================
-// game-data-loader.js: Carga Asíncrona de Datos (SOLUCIÓN WORKER DEFINITIVA CON URL())
+// game-data-loader.js: Carga Asíncrona de Datos y Renderizado del Grid (Optimizado para CSS Animation - Minificado Leve)
 // =========================================================================
 
 (function () {
@@ -9,35 +9,6 @@
     const I_EXT_WEBP = ".webp";
     const A_RATIO = '16/9';
     const G_VAR_N = `currentGameListString`;
-
-    // --- INICIALIZACIÓN DEL WEB WORKER (RUTA ABSOLUTA GARANTIZADA para GitHub Pages) ---
-    let dataParserWorker = null;
-    if (window.Worker) {
-        try {
-            // 1. Define la ruta relativa del Worker (desde la ubicación de index.html)
-            const workerRelativePath = 'Js/worker-data-parser.js';
-            
-            // 2. Combina la URL base (document.baseURI) con la ruta del Worker.
-            // document.baseURI es la forma más robusta de obtener la raíz del *path* actual
-            // (ej: 'https://user.github.io/repo-name/').
-            const workerURL = new URL(workerRelativePath, document.baseURI).href;
-
-            dataParserWorker = new Worker(workerURL); 
-            console.log('✅ Worker inicializado con éxito:', workerURL);
-            
-            dataParserWorker.onerror = (e) => {
-                console.error('🚨 Fallo de inicialización/ejecución del Worker (Verificar la ruta Network/Consola).', e);
-                dataParserWorker = null; 
-            };
-        } catch (e) {
-            console.error('❌ Fallo CRÍTICO al inicializar Worker (New Worker). Forzando Fallback.', e);
-            dataParserWorker = null;
-        }
-    } else {
-        console.warn('❌ window.Worker no está disponible en este navegador.');
-    }
-    // -----------------------------------------------------------------
-
 
     function loadGameItems(systemName, callback) {
         if (dCache[systemName]) {
@@ -51,123 +22,162 @@
         script.src = scriptUrl;
 
         const processData = (scriptElement) => {
-            let items = [];
             const rawText = window[G_VAR_N];
 
-            if (typeof rawText === 'string') {
-                if (dataParserWorker) {
-                    // **RUTA PRINCIPAL: WEB WORKER**
-                    dataParserWorker.onmessage = function(event) {
-                        if (event.data.type === 'PARSE_COMPLETE') {
-                            console.log('➡️ Datos recibidos del Worker. UI fluida.');
-                            items = event.data.items;
-                            completeProcessing(items);
-                            dataParserWorker.onmessage = null; 
-                        }
-                    };
-                    dataParserWorker.postMessage({ type: 'PARSE_GAME_DATA', rawText });
-                    return; 
-                } else if (window.parseHyphenList) {
-                    // **RUTA SECUNDARIA: FALLBACK SÍNCRONO**
-                    console.warn(`⚠️ Fallback al hilo principal. (Posible lag al cargar lista grande).`);
-                    items = window.parseHyphenList(rawText);
-                } else {
-                     console.error(`🚨 Fallo total: No hay Worker ni función de parseo global.`);
-                }
-            } else {
-                 console.warn(`[ADVERTENCIA] La variable global ${G_VAR_N} no se encontró.`);
+            if (window.hasOwnProperty(G_VAR_N)) {
+                delete window[G_VAR_N];
             }
             
-            // Si el Worker falló o no se usó, completamos el procesamiento aquí
-            completeProcessing(items);
-        };
-
-        const completeProcessing = (items) => {
-            if (window.hasOwnProperty(G_VAR_N)) {
-                 try {
-                     delete window[G_VAR_N];
-                 } catch (e) { /* Ignoramos */ }
+            if (typeof rawText !== 'string' || !rawText) {
+                console.warn(`[ADVERTENCIA] La variable global ${G_VAR_N} no se encontró o no es válida.`);
+                dCache[systemName] = [];
+                requestAnimationFrame(() => {
+                    callback([]);
+                    scriptElement.remove(); 
+                });
+                return;
             }
 
-            if (script.parentNode) script.parentNode.removeChild(script);
+            // --- INICIO: USO DEL WEB WORKER PARA EL PARSEO ---
+            
+            let items = [];
+            
+            if ('Worker' in window) {
+                const worker = new Worker('./Js/data-parser-worker.js'); // Crea una instancia del Worker
+                
+                worker.onmessage = (e) => {
+                    if (e.data.type === 'PARSE_COMPLETE') {
+                        items = e.data.items;
+                    } else if (e.data.type === 'PARSE_ERROR') {
+                         console.error('[WORKER] Error al recibir datos parseados.');
+                    }
+                    
+                    dCache[systemName] = items;
+                    requestAnimationFrame(() => {
+                        callback(items);
+                        scriptElement.remove(); 
+                    });
+                    worker.terminate(); // Termina el Worker una vez completado
+                };
 
-            dCache[systemName] = items;
-            callback(items);
+                worker.onerror = (error) => {
+                    console.error('[WORKER] Error crítico del Web Worker:', error);
+                    dCache[systemName] = [];
+                    requestAnimationFrame(() => {
+                        callback([]);
+                        scriptElement.remove();
+                    });
+                };
+                
+                // Envía el texto a parsear al Worker
+                worker.postMessage({ type: 'PARSE_DATA', rawText: rawText });
+
+            } else {
+                // Fallback si Web Worker no es soportado (caso muy raro en navegadores modernos)
+                console.warn('[ADVERTENCIA] Web Workers no soportados. Usando hilo principal.');
+                
+                dCache[systemName] = items; // items es []
+                requestAnimationFrame(() => {
+                    callback(items);
+                    scriptElement.remove(); 
+                });
+            }
+
+            // --- FIN: USO DEL WEB WORKER PARA EL PARSEO ---
         };
 
-        script.onload = () => processData(script);
-        script.onerror = (e) => {
-            console.error(`[ERROR] Fallo al cargar script de datos: ${scriptUrl}`, e);
-            processData(script); 
+        script.onload = () => {
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(() => processData(script));
+            } else {
+                setTimeout(() => processData(script), 0);
+            }
+        };
+
+        script.onerror = () => {
+            console.error(`[ERROR] 🚨 No se pudo cargar el archivo de datos: ${scriptUrl}.`);
+            dCache[systemName] = [];
+            
+            setTimeout(() => {
+                callback([]);
+                script.remove();
+            }, 0);
         };
 
         document.head.appendChild(script);
     }
 
     function createGridItem(item, systemNameLower, index) {
+        
+        const imgBase = item.name;
+        const imgFileThumb = imgBase + "-thumb";
+        const imgUrl = `${G_DIR}${systemNameLower}/${imgFileThumb}${I_EXT_WEBP}`;
+        const cleanName = window.cleanGameName ? window.cleanGameName(item.name) : item.name;
+
         const itemEl = document.createElement('li');
         itemEl.classList.add('grid-item');
-        itemEl.setAttribute('role', 'gridcell');
-        itemEl.setAttribute('tabindex', index === 0 ? '0' : '-1');
-        itemEl.setAttribute('data-index', index);
-        itemEl.setAttribute('aria-label', item.title);
-        itemEl.setAttribute('data-url', item.url);
-        itemEl.setAttribute('data-title', item.title);
+        itemEl.dataset.index = index;
 
-        const imageUrl = `Covers/${systemNameLower}/${item.title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}${I_EXT_WEBP}`;
+        const titleEl = document.createElement('div');
+        titleEl.classList.add('grid-item-title');
+        titleEl.textContent = cleanName;
 
-        const imageContainer = document.createElement('div');
-        imageContainer.classList.add('grid-item-image-container');
-        
-        const img = document.createElement('img');
-        img.classList.add('grid-item-image', 'is-loading');
-        img.src = L_SVG; 
-        img.alt = `Portada de ${item.title}`;
-        img.setAttribute('loading', 'lazy'); 
+        const imgEl = document.createElement('img');
+        imgEl.classList.add('grid-item-image', 'is-loading'); 
+        imgEl.src = L_SVG;
+        imgEl.alt = item.name;
+        imgEl.title = item.name;
+        imgEl.style.aspectRatio = A_RATIO; 
 
-        const actualImg = new Image();
-        actualImg.src = imageUrl;
+        const preloader = new Image();
 
-        actualImg.onload = () => {
-            if ('decode' in actualImg) {
-                actualImg.decode().then(() => {
-                    requestAnimationFrame(() => {
-                        img.src = imageUrl;
-                        img.classList.remove('is-loading');
-                    });
-                }).catch(() => {
-                    requestAnimationFrame(() => {
-                        img.src = imageUrl;
-                        img.classList.remove('is-loading');
-                    });
-                });
-            } else {
-                 requestAnimationFrame(() => {
-                    img.src = imageUrl;
-                    img.classList.remove('is-loading');
+        preloader.addEventListener('load', function() {
+            requestAnimationFrame(() => {
+                imgEl.src = imgUrl;
+                imgEl.style.aspectRatio = `${this.naturalWidth} / ${this.naturalHeight}`;
+                imgEl.style.objectFit = 'cover';
+                imgEl.style.padding = '0';
+                imgEl.classList.remove('is-loading');
+            });
+        });
+
+        preloader.addEventListener('error', function() {
+            requestAnimationFrame(() => {
+                imgEl.alt = `Error al cargar portada para ${item.name}`;
+                console.warn(`[ERROR IMAGEN] No se pudo cargar la imagen para: ${item.name}`);
+                imgEl.classList.remove('is-loading'); 
+            });
+        });
+
+        preloader.src = imgUrl;
+
+        itemEl.addEventListener('click', () => {
+            const clickIndex = parseInt(itemEl.dataset.index, 10);
+            
+            if (window.isCenteringActive !== undefined) window.isCenteringActive = true;
+            if (typeof window.updateGridSelection === 'function') {
+                requestAnimationFrame(() => {
+                    window.updateGridSelection(clickIndex, true, false, false);
                 });
             }
-        };
 
-        actualImg.onerror = () => {
-             console.warn(`Fallo al cargar la portada: ${imageUrl}`);
-        };
+            const finalImgUrl = imgEl.classList.contains('is-loading') 
+                ? L_SVG 
+                : imgUrl;
+                
+            if (typeof window.abrirDetallesJuego === 'function') {
+                window.abrirDetallesJuego(item.name, finalImgUrl, item.url);
+            }
+        });
 
-        imageContainer.appendChild(img);
-
-        const titleEl = document.createElement('p');
-        titleEl.classList.add('grid-item-title');
-        titleEl.textContent = item.title;
-
-        itemEl.appendChild(imageContainer);
+        itemEl.appendChild(imgEl);
         itemEl.appendChild(titleEl);
 
         return itemEl;
     }
 
-    function renderGameGrid(items, systemName, systemNameLower, modalTitle) {
-        const contentGridContainer = document.getElementById('content-grid-container');
-        if (!contentGridContainer) return;
+    function renderGrid(items, systemName, contentGridContainer, modalTitle) {
+        const systemNameLower = systemName.toLowerCase();
 
         contentGridContainer.innerHTML = '';
         if (window.gridItemsElements) window.gridItemsElements = []; 
@@ -205,6 +215,6 @@
     }
 
     window.loadGameItems = loadGameItems;
-    window.renderGameGrid = renderGameGrid;
+    window.renderGrid = renderGrid;
 
 })();
