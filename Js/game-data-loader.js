@@ -10,7 +10,7 @@
     const A_RATIO = '16/9';
     const G_VAR_N = `currentGameListString`;
 
-    function loadGameItems(systemName, callback) {
+    function loadGameItems(systemName, callback) { // systemName es 'systemName'
         if (dCache[systemName]) {
             requestAnimationFrame(() => callback(dCache[systemName]));
             return;
@@ -49,7 +49,7 @@
                     if (e.data.type === 'PARSE_COMPLETE') {
                         items = e.data.items;
                     } else if (e.data.type === 'PARSE_ERROR') {
-                         console.error('[WORKER] Error al recibir datos parseados.');
+                         console.error(`[WORKER] Error al recibir datos parseados para ${systemName}.`); // LOGGING MEJORADO
                     }
                     
                     dCache[systemName] = items;
@@ -61,7 +61,7 @@
                 };
 
                 worker.onerror = (error) => {
-                    console.error('[WORKER] Error crítico del Web Worker:', error);
+                    console.error(`[WORKER] Error crítico del Web Worker para ${systemName}:`, error); // LOGGING MEJORADO
                     dCache[systemName] = [];
                     requestAnimationFrame(() => {
                         callback([]);
@@ -69,8 +69,12 @@
                     });
                 };
                 
-                // Envía el texto a parsear al Worker
-                worker.postMessage({ type: 'PARSE_DATA', rawText: rawText });
+                // Envía el texto a parsear Y el nombre del sistema al Worker
+                worker.postMessage({ 
+                    type: 'PARSE_DATA', 
+                    rawText: rawText,
+                    systemName: systemName // <--- CAMBIO AQUÍ: Se añade el nombre del sistema
+                });
 
             } else {
                 // Fallback si Web Worker no es soportado (caso muy raro en navegadores modernos)
@@ -106,7 +110,7 @@
 
         document.head.appendChild(script);
     }
-
+// ... (resto de funciones sin modificar: createGridItem, renderGrid) ...
     function createGridItem(item, systemNameLower, index) {
         
         const imgBase = item.name;
