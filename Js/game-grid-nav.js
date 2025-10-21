@@ -1,295 +1,430 @@
 // =========================================================================
-// game-grid-nav.js: Minificado leve
+// game-grid-nav.js: Navegación de Grid (Optimización de Caché de Fila)
 // =========================================================================
 
-class GameGridNavigator {
-    static GRID_NAV_DELAY_MS = 150;
-    static CENTERING_MARGIN_PX = 100;
-    static SCROLL_SMOOTHING_FACTOR = 0.2;
-    static SCROLL_TOLERANCE_PX = 2;
+class GGN {
+    static D_MS = 150; 
+    static S_FACT = 0.2; 
+    static S_TOL_PX = 0.5; 
+    static MIN_CT_D = 5000; 
 
-    currentGridIndex = 0;
-    gridItemsElements = [];
-    isCenteringActive = false;
-    gridNavLock = false;
+    iX = 0; 
+    gIE = []; 
+    nL = false; 
+    lNT = 0; 
 
-    isProgrammaticScrolling = false;
-    scrollTarget = 0;
-    currentScroll = 0;
-    scrollAnimationFrameId = null;
-    centeringCheckIntervalId = null;
+    pS = false; 
+    sT = 0; 
+    cS = 0; 
+    sAF = null; 
+    
+    cLId = null; 
+    cST = 0; 
 
-    modalBodyRef = null;
-    modalOverlayRef = null;
-    gameDetailsOverlayRef = null;
+    mB = null; 
+    mO = null; 
+    dO = null; 
+    
+    cC = 1; 
+    vH = 0; 
+    rM = []; // <-- NUEVA CACHÉ DE MÉTRICAS DE FILA
 
     constructor() {
-        this.bindGlobalState();
-        document.addEventListener('DOMContentLoaded', this.initializeDOMAndEvents.bind(this));
+        this._B(); 
+        document.addEventListener('DOMContentLoaded', this._I.bind(this));
     }
 
-    bindGlobalState() {
-        const globalProps = ['currentGridIndex', 'gridItemsElements', 'isCenteringActive'];
-        globalProps.forEach(prop => {
-            Object.defineProperty(window, prop, {
-                get: () => this[prop],
-                set: (val) => { this[prop] = val; },
-                configurable: true
-            });
+    _B() { 
+        Object.defineProperty(window, 'currentGridIndex', {
+            get: () => this.iX,
+            set: (v) => { this.iX = v; },
+            configurable: true
         });
-        window.updateGridSelection = this.updateGridSelection.bind(this);
-        window.resetNavigationState = this.resetNavigationState.bind(this);
-        window.checkAndRecenterGridSelection = this.checkAndRecenterGridSelection.bind(this); 
+        Object.defineProperty(window, 'gridItemsElements', {
+            get: () => this.gIE,
+            set: (v) => { this.gIE = v; },
+            configurable: true
+        });
+        
+        window.updateGridSelection = this.uGS.bind(this);
+        window.resetNavigationState = this.rNS.bind(this);
     }
 
-    animateGridScroll = () => {
-        const { SCROLL_SMOOTHING_FACTOR, SCROLL_TOLERANCE_PX } = GameGridNavigator;
-        const scrollDifference = this.scrollTarget - this.currentScroll;
+    _C() { // Determine Grid Columns
+        const i = this.gIE;
+        if (i.length <= 1 || !i[0].offsetParent) {
+            this.cC = 1;
+            return;
+        }
+
+        const fT = i[0].offsetTop; 
+        let c = 0;
         
-        this.currentScroll += scrollDifference * SCROLL_SMOOTHING_FACTOR;
+        for (let j = 0; j < i.length; j++) {
+            if (!i[j].offsetParent) continue; 
+            
+            if (Math.abs(i[j].offsetTop - fT) < 2) { 
+                c++;
+            } else {
+                break;
+            }
+        }
         
-        if (Math.abs(scrollDifference) < SCROLL_TOLERANCE_PX) {
-            this.currentScroll = this.scrollTarget;
-            cancelAnimationFrame(this.scrollAnimationFrameId);
-            this.scrollAnimationFrameId = null;
-            this.isProgrammaticScrolling = false;
+        this.cC = Math.max(1, c); 
+    }
+    
+    _D() { // Determine/Cache Row Metrics
+        const { gIE: i, cC: c } = this;
+        this.rM = [];
+
+        if (i.length === 0) return;
+
+        let currRow = -1;
+        
+        for (let j = 0; j < i.length; j++) {
+            const row = Math.floor(j / c);
+            
+            if (row !== currRow) {
+                currRow = row;
+                this.rM[currRow] = { h: 0 }; 
+            }
+            
+            const h = i[j].offsetHeight;
+            if (h > this.rM[currRow].h) {
+                 this.rM[currRow].h = h;
+            }
+        }
+    }
+
+    _U() { // Update Dimensions
+        if (!this.mB) return;
+        this._C(); 
+        this._D(); // <-- LLAMADA PARA CACHEAR LAS MÉTRICAS
+        this.vH = this.mB.clientHeight;
+    }
+    
+    _A = () => { // Apply Grid Scroll
+        const { S_FACT, S_TOL_PX } = GGN;
+        const d = this.sT - this.cS; 
+        
+        this.cS += d * S_FACT;
+        
+        if (Math.abs(d) < S_TOL_PX) {
+            this.cS = this.sT; 
+            cancelAnimationFrame(this.sAF);
+            this.sAF = null;
+            this.pS = false;
         } else {
-            this.scrollAnimationFrameId = requestAnimationFrame(this.animateGridScroll);
+            this.sAF = requestAnimationFrame(this._A);
         }
         
-        this.modalBodyRef.scrollTop = this.currentScroll;
+        this.mB.scrollTop = this.cS;
+    }
+    
+    _S(e) { // Calculate Scroll Target
+        if (!this.mB || !e) return 0;
+
+        const r = Math.floor(this.iX / this.cC);
+        const m = this.rM[r]?.h || 0; // <-- USO DE CACHÉ (rM)
+        
+        const c1 = e.getBoundingClientRect(); 
+        const c2 = this.mB.getBoundingClientRect();
+        const eT = c1.top - c2.top + this.mB.scrollTop; 
+        
+        let tS = eT - ((this.vH - m) / 2); 
+        
+        tS = Math.max(0, tS);
+        tS = Math.min(tS, this.mB.scrollHeight - this.vH);
+        
+        return tS;
     }
 
-    getMaxRowHeight(rowIndex, currentColumns) {
-        let maxHeight = 0;
-        const items = this.gridItemsElements;
-        const rowStartIndex = rowIndex * currentColumns;
-        const rowEndIndex = Math.min(rowStartIndex + currentColumns, items.length);
-
-        for (let i = rowStartIndex; i < rowEndIndex; i++) {
-            const item = items[i];
-            if (item && item.offsetHeight > maxHeight) {
-                maxHeight = item.offsetHeight;
-            }
-        }
-        return maxHeight;
+    _Z(e) { 
+        if (!this.mB || !e) return true;
+        
+        return Math.abs(this.mB.scrollTop - this._S(e)) < GGN.S_TOL_PX;
     }
+    
+    _E(tS) { 
+        const { S_TOL_PX } = GGN;
+        this.sT = tS;
 
-    updateGridSelection(newIndex, forceScroll = true, isResizeOrInitialLoad = false, ignoreHorizontalCheck = false) {
-        const items = this.gridItemsElements;
-        if (items.length === 0 || !this.modalBodyRef) return;
-
-        const oldIndex = this.currentGridIndex;
-        
-        items[oldIndex]?.classList.remove('selected');
-        this.currentGridIndex = newIndex;
-        items[newIndex].classList.add('selected');
-
-        if (!forceScroll) return;
-
-        if (!isResizeOrInitialLoad && !ignoreHorizontalCheck && oldIndex !== null) {
-            const currentColumns = window.getGridColumns();
-            if (Math.floor(newIndex / currentColumns) === Math.floor(oldIndex / currentColumns)) {
-                this.checkAndRecenterGridSelection(true);
-                return;
-            }
-        }
-
-        const viewportHeight = this.modalBodyRef.clientHeight;
-        const currentColumns = window.getGridColumns();
-        const rowIndex = Math.floor(this.currentGridIndex / currentColumns);
-        const rowStartElement = items[rowIndex * currentColumns];
-        if (!rowStartElement) return;
-
-        const maxHeight = this.getMaxRowHeight(rowIndex, currentColumns);
-        const elementRect = rowStartElement.getBoundingClientRect();
-        const containerRect = this.modalBodyRef.getBoundingClientRect();
-        const elementTopInScroll = elementRect.top - containerRect.top + this.modalBodyRef.scrollTop; 
-        
-        let targetScroll = elementTopInScroll - ((viewportHeight - maxHeight) / 2);
-        
-        targetScroll = Math.max(0, targetScroll);
-        targetScroll = Math.min(targetScroll, this.modalBodyRef.scrollHeight - viewportHeight);
-        this.scrollTarget = targetScroll;
-
-        const { SCROLL_TOLERANCE_PX } = GameGridNavigator;
-        if (Math.abs(this.scrollTarget - this.modalBodyRef.scrollTop) < SCROLL_TOLERANCE_PX) {
-            if (this.scrollAnimationFrameId) cancelAnimationFrame(this.scrollAnimationFrameId);
-            this.scrollAnimationFrameId = null;
-            this.isProgrammaticScrolling = false;
+        if (Math.abs(this.sT - this.mB.scrollTop) < S_TOL_PX) {
+            if (this.sAF) cancelAnimationFrame(this.sAF);
+            this.sAF = null;
+            this.pS = false;
             return;
         }
 
-        if (this.scrollAnimationFrameId === null) {
-            this.currentScroll = this.modalBodyRef.scrollTop;
-            this.isProgrammaticScrolling = true;
-            this.scrollAnimationFrameId = requestAnimationFrame(this.animateGridScroll);
+        if (this.sAF === null) {
+            this.cS = this.mB.scrollTop;
+            this.pS = true;
+            this.sAF = requestAnimationFrame(this._A);
         }
     }
 
-    startCenteringCheck() {
-        if (!this.centeringCheckIntervalId) {
-            this.centeringCheckIntervalId = setInterval(this.checkAndRecenterGridSelection.bind(this, false), 250);
-        }
-    }
-
-    stopCenteringCheck() {
-        if (this.centeringCheckIntervalId) {
-            clearInterval(this.centeringCheckIntervalId);
-            this.centeringCheckIntervalId = null;
-        }
-    }
-
-    checkAndRecenterGridSelection(forceRecenter = false) {
-        const { CENTERING_MARGIN_PX } = GameGridNavigator;
-        const items = this.gridItemsElements;
+    _R() { 
+        const e = this.gIE[this.iX];
+        if (!e) return;
         
-        const isModalOpen = this.modalOverlayRef?.classList.contains('open');
-        const isDetailsOpen = this.gameDetailsOverlayRef?.classList.contains('open');
+        this._E(this._S(e));
+    }
+    
+    _P(e) { 
+        if (!e) return;
+        
+        e.classList.remove('tag-center');
 
-        if (!this.modalBodyRef || items.length === 0 || !isModalOpen || isDetailsOpen || (!this.isCenteringActive && !forceRecenter)) {
+        if (this.cLId) {
+            cancelAnimationFrame(this.cLId);
+            this.cLId = null;
+        }
+
+        if (this.sAF) {
+            cancelAnimationFrame(this.sAF);
+            this.sAF = null;
+            this.pS = false;
+        }
+    }
+
+    _L = () => { 
+        const { MIN_CT_D } = GGN;
+        const e = this.gIE[this.iX];
+
+        if (!e || !e.classList.contains('tag-center')) {
+            if (this.cLId) {
+                cancelAnimationFrame(this.cLId);
+                this.cLId = null;
+            }
             return;
         }
 
-        const selectedElement = items[this.currentGridIndex];
-        if (!selectedElement) return;
-
-        const viewportHeight = this.modalBodyRef.clientHeight;
-        const elementRect = selectedElement.getBoundingClientRect();
-        const containerRect = this.modalBodyRef.getBoundingClientRect();
-
-        const elementTopInViewport = elementRect.top - containerRect.top;
-        const elementBottomInViewport = elementRect.bottom - containerRect.top;
-
-        const margin = CENTERING_MARGIN_PX * (this.isProgrammaticScrolling ? 0.5 : 1.0); 
-
-        const isTooHigh = elementTopInViewport < margin;
-        const isTooLow = elementBottomInViewport > viewportHeight - margin;
-        const isOutOfView = elementBottomInViewport < 0 || elementTopInViewport > viewportHeight;
+        const tE = performance.now() - this.cST; 
+        const isC = this._Z(e); 
         
-        if (isTooHigh || isTooLow || isOutOfView) {
-            this.updateGridSelection(this.currentGridIndex, true, true, true);
+        if (isC && tE >= MIN_CT_D) {
+            this._P(e); 
+            return;
         }
+        
+        if (!isC) {
+            this._R(); 
+        }
+
+        this.cLId = requestAnimationFrame(this._L);
     }
 
-    resetNavigationState() {
-        this.currentGridIndex = 0;
-        this.isCenteringActive = false;
-        this.gridNavLock = false;
-        this.isProgrammaticScrolling = false;
-        this.scrollTarget = 0;
-        this.currentScroll = 0;
-        this.stopCenteringCheck();
-        if (this.scrollAnimationFrameId) {
-            cancelAnimationFrame(this.scrollAnimationFrameId);
-            this.scrollAnimationFrameId = null;
-        }
-    }
+    uGS(nI, fC = false, rC = false) {
+        const i = this.gIE;
+        if (i.length === 0 || !this.mB) return;
 
-    handleModalScroll = () => {
-        if (!this.isProgrammaticScrolling) {
-            this.isCenteringActive = false; 
-            if (this.scrollAnimationFrameId) {
-                cancelAnimationFrame(this.scrollAnimationFrameId);
-                this.scrollAnimationFrameId = null;
+        this._U(); 
+        
+        const oI = this.iX; 
+        const eM = i[nI]; 
+        if (!eM) return;
+        
+        if (!rC) {
+            i[oI]?.classList.remove('selected');
+            this.iX = nI;
+            eM.classList.add('selected');
+        } else {
+             this.iX = nI; 
+        }
+
+        if (oI !== nI) {
+            i[oI]?.classList.remove('tag-center');
+        }
+        
+        if (fC) {
+            eM.classList.add('tag-center');
+            this.cST = performance.now();
+            if (this.cLId === null) {
+                this.cLId = requestAnimationFrame(this._L);
             }
+            this._E(this._S(eM));
+        }
+        
+        else if (eM.classList.contains('tag-center') && !this._Z(eM)) {
+             this._R();
+        }
+    }
+    
+    rNS() { 
+        this.iX = 0;
+        this.nL = false;
+        this.lNT = 0;
+        
+        this.gIE.forEach(item => this._P(item));
+        
+        this.pS = false;
+        this.sT = 0;
+        this.cS = 0;
+        this.cST = 0;
+    }
+
+    _W = (event) => { 
+        const e = this.gIE[this.iX];
+        if (e && e.classList.contains('tag-center')) {
+            this._P(e);
         }
     }
 
-    handleKeydown = (event) => {
-        const { GRID_NAV_DELAY_MS } = GameGridNavigator;
+    _H = () => { 
+        if (!this.pS && this.gIE[this.iX]?.classList.contains('tag-center')) {
+            this._P(this.gIE[this.iX]);
+        }
+    }
+    
+    _T(event) { 
+        const e = event.currentTarget;
+        const nI = parseInt(e.dataset.index, 10);
+        
+        this.uGS(nI, true, false); 
+    }
+
+    _K = (event) => { 
+        const { D_MS } = GGN;
         const { key, repeat } = event;
-        const items = this.gridItemsElements;
+        const i = this.gIE;
 
-        const isDetailsOpen = this.gameDetailsOverlayRef?.classList.contains('open');
-        const isModalOpen = this.modalOverlayRef?.classList.contains('open');
-        const isGridActive = isModalOpen && !isDetailsOpen && items.length > 0;
-
+        const isD = this.dO?.classList.contains('open'); 
+        const isM = this.mO?.classList.contains('open'); 
+        const isGA = isM && !isD && i.length > 0; 
+        
         if (key === 'Enter' && window.inputLock) {
             event.preventDefault();
             return;
         }
         if (key === 'Escape') {
-            if (isDetailsOpen) window.cerrarDetallesJuego();
-            else if (isModalOpen) window.cerrarModal();
+            if (isD && window.cerrarDetallesJuego) window.cerrarDetallesJuego();
+            else if (isM && window.cerrarModal) window.cerrarModal();
             event.preventDefault();
             return;
         }
 
-        if (isGridActive) {
-            if (repeat && this.gridNavLock) {
-                event.preventDefault();
-                return;
+        if (isGA) {
+            const isN = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(key); 
+
+            if (repeat) {
+                const now = performance.now();
+                if (this.nL && now - this.lNT < D_MS) {
+                     event.preventDefault();
+                     return;
+                }
+                this.lNT = now;
+            }
+            
+            if (isN && !i[this.iX]?.classList.contains('selected')) {
+                this.uGS(0, true, false); 
+                event.preventDefault(); 
+                return; 
             }
 
-            let newIndex = this.currentGridIndex;
-            let handled = false;
-            const lastIndex = items.length - 1;
-            const currentColumns = window.getGridColumns();
-            const oldIndex = this.currentGridIndex;
+            let nI = this.iX;
+            let h = false; 
+            const lI = i.length - 1; 
+            const c = this.cC; 
+            const oI = this.iX; 
 
             switch (key) {
                 case 'ArrowLeft':
-                    newIndex = (newIndex === 0) ? lastIndex : newIndex - 1; 
-                    handled = true;
+                    nI = (nI === 0) ? lI : nI - 1; 
+                    h = true;
                     break;
                 case 'ArrowRight':
-                    newIndex = (newIndex === lastIndex) ? 0 : newIndex + 1; 
-                    handled = true;
+                    nI = (nI === lI) ? 0 : nI + 1; 
+                    h = true;
                     break;
                 case 'ArrowUp':
-                    newIndex = Math.max(0, newIndex - currentColumns);
-                    handled = true;
+                    nI = Math.max(0, nI - c);
+                    h = true;
                     break;
                 case 'ArrowDown':
-                    newIndex = Math.min(lastIndex, newIndex + currentColumns);
-                    handled = true;
+                    nI = Math.min(lI, nI + c);
+                    h = true;
                     break;
                 case 'Enter':
-                    items[newIndex].click();
-                    handled = true;
-                    break;
-                default:
-                    this.isCenteringActive = false;
+                    this.uGS(nI, true, false); 
+                    i[nI].click();
+                    h = true;
                     break;
             }
 
-            if (handled && key !== 'Enter') {
-                if (newIndex !== oldIndex) {
-                    if (repeat) {
-                        this.gridNavLock = true;
-                        setTimeout(() => { this.gridNavLock = false; }, GRID_NAV_DELAY_MS);
+            if (h && key !== 'Enter') {
+                const oR = Math.floor(oI / c); 
+                const nR = Math.floor(nI / c); 
+                const rC = oR !== nR; 
+                
+                let fC = false; 
+
+                if (nI !== oI) {
+                    if (rC) {
+                        fC = true;
                     }
-                    this.isCenteringActive = true;
-                    this.updateGridSelection(newIndex);
+                } else {
+                    fC = true;
+                }
+
+                if (nI !== this.iX) {
+                    if (repeat) this.nL = true;
+                    this.uGS(nI, fC, false); 
+                } 
+                else if (fC) { 
+                    this.uGS(nI, true, false);
                 }
                 event.preventDefault();
             }
+            if (!repeat) this.nL = false;
         }
 
-        if ((isModalOpen || isDetailsOpen) && key !== 'Enter' && key !== 'Tab' && key !== 'Shift') {
+        if ((isM || isD) && key !== 'Enter' && key !== 'Tab' && key !== 'Shift') {
             event.preventDefault();
         }
     }
 
-    initializeDOMAndEvents() {
-        this.modalBodyRef = document.querySelector('.modal-body');
-        this.modalOverlayRef = document.getElementById('modal-overlay');
-        this.gameDetailsOverlayRef = document.getElementById('game-details-overlay');
+    _I() { 
+        this.mB = document.querySelector('.modal-body');
+        this.mO = document.getElementById('modal-overlay');
+        this.dO = document.getElementById('game-details-overlay');
+        const cG = document.getElementById('content-grid-container'); 
 
-        if (this.modalBodyRef && this.modalOverlayRef) {
-            this.modalBodyRef.addEventListener('scroll', this.handleModalScroll, { passive: true });
+        this._U();
+        
+        if (this.mB) {
+             const rO = new ResizeObserver(() => {
+                this._U(); 
+             });
+             rO.observe(this.mB);
+        }
+
+        cG?.addEventListener('click', (event) => {
+            const t = event.target.closest('.grid-item');
+            if (t) this._T({ currentTarget: t });
+        });
+
+        if (this.mB && this.mO) {
+            this.mB.addEventListener('scroll', this._H, { passive: true });
+            this.mB.addEventListener('wheel', this._W, { passive: true });
             
-            this.modalBodyRef.addEventListener('mousedown', (event) => {
-                if (this.modalOverlayRef.classList.contains('open') && !event.target.closest('.grid-item')) {
-                     this.isCenteringActive = false;
+            const s = () => { 
+                this._P(this.gIE[this.iX]);
+            };
+
+            this.mB.addEventListener('mousedown', (event) => {
+                if (this.mO.classList.contains('open') && !event.target.closest('.grid-item')) {
+                     s();
+                }
+            });
+            this.mO.addEventListener('mousedown', (event) => {
+                if (event.target === this.mO) {
+                    s();
                 }
             });
         }
 
-        document.addEventListener('keydown', this.handleKeydown);
-        this.startCenteringCheck(); 
+        document.addEventListener('keydown', this._K);
     }
 }
 
-window.gameGridNavigatorInstance = new GameGridNavigator();
+window.gameGridNavigatorInstance = new GGN();
