@@ -20,7 +20,8 @@ const criticalUrlsToCache = [
     './Js/game-grid-nav.js',
     './Js/mediafire-downloader.js',
     './Js/game-details-logic.js',
-    './Js/ui-logic.js'
+    './Js/ui-logic.js',
+    './Js/data-parser-worker.js' // AÑADIDO: Worker Script
 ];
 
 // 2. Archivos No Críticos (Imágenes Grandes) - Cacheo en segundo plano
