@@ -1,5 +1,5 @@
-const STATIC_CACHE_NAME = 'retrostation-static-v4'; // ¡VERSIÓN INCREMENTADA!
-const RUNTIME_CACHE_NAME = 'retrostation-runtime-v3'; // ¡VERSIÓN INCREMENTADA!
+const STATIC_CACHE_NAME = 'retrostation-static-v5'; // ¡VERSIÓN INCREMENTADA!
+const RUNTIME_CACHE_NAME = 'retrostation-runtime-v4'; // ¡VERSIÓN INCREMENTADA!
 
 // Lista de sistemas para generar URLs
 const menuItems = [
@@ -36,9 +36,18 @@ const criticalUrlsToCache = [
     './Js/game-details-logic.js',
     './Js/ui-logic.js',
     './Js/data-parser-worker.js',
-    // === NUEVOS ICONOS DE SISTEMAS AÑADIDOS AL CACHE CRÍTICO (SVG) ===
+    // === ICONOS DE SISTEMAS EN CACHE CRÍTICO ===
     ...systemIcons
 ];
+
+// 2. Archivos No Críticos (Imágenes Grandes) - Cacheo en segundo plano
+// Ahora solo contiene los fondos generados, eliminando el duplicado de psx.jpg
+const nonCriticalImageCache = [
+    // ELIMINADO: './Fondos/psx.jpg' (Está incluido en ...systemBackgrounds)
+    // === FONDOS DE SISTEMAS EN CACHE NO CRÍTICO ===
+    ...systemBackgrounds
+];
+
 
 // Instalación: Divide el cacheo en dos tareas asíncronas.
 self.addEventListener('install', event => {
@@ -82,7 +91,7 @@ self.addEventListener('activate', event => {
     );
 });
 
-// Fetch: Estrategias de cacheo (sin cambios en la lógica, solo se benefician de las nuevas URLs)
+// Fetch: Estrategias de cacheo
 self.addEventListener('fetch', event => {
     const requestUrl = new URL(event.request.url);
 
@@ -120,4 +129,3 @@ self.addEventListener('fetch', event => {
         fetch(event.request).catch(() => caches.match(event.request))
     );
 });
-
