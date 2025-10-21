@@ -1,5 +1,5 @@
 // =========================================================================
-// main-modal-manager.js: CONSERVADO (Lógica de URL Base y envío al Worker)
+// main-modal-manager.js: Minificado Leve (Optimizado para CSS Animation) - MODIFICADO
 // =========================================================================
 
 window.inputLock = false;
@@ -14,45 +14,69 @@ const INPUT_LOCK_DELAY = 200;
 
 let modalOverlay, modalHeader, modalImage, modalTitle, contentGridContainer;
 
-// 1. OBTENER LA BASE PATH: 
-const BASE_URL_FULL = document.baseURI || window.location.href;
-const URL_BASE_CLEANED = BASE_URL_FULL.substring(0, BASE_URL_FULL.lastIndexOf('/') + 1);
+// --- NUEVO: Instancia del Web Worker de Decodificación de Imágenes ---
+// Se inicializa el Worker, asegurándose de que el archivo exista.
+const imageDecoderWorker = new Worker('./Js/image-decoder-worker.js');
+const activeDecodes = new Map(); // Mapa para manejar promesas de decodificación activas
 
-// 2. Inicializar el Web Worker
-const imageWorker = new Worker('Js/image-worker.js');
+// Función para manejar la respuesta del Worker
+imageDecoderWorker.onmessage = function(event) {
+    const { type, imageUrl, imageBitmap, error } = event.data;
+    const resolveReject = activeDecodes.get(imageUrl);
 
-// 3. Manejar mensajes del Worker
-imageWorker.onmessage = (e) => {
-    if (e.data.status === 'loaded') {
-        // console.log(`[PRECARGA WORKER] Decodificado: ${e.data.relativeUrl}`);
-    } else if (e.data.status === 'complete') {
-        console.log("[PRECARGA WORKER] Recursos cargados/decodificados (completado).");
+    if (!resolveReject) return; // Si la promesa no existe, ignorar
+
+    const [resolve, reject] = resolveReject;
+
+    if (type === 'DECODE_COMPLETE' && imageBitmap) {
+        // En lugar de usar una etiqueta <img>, usamos un <img> temporal o 
+        // Canvas. Para el precargado, solo verificar que la decodificación fue exitosa.
+        // Si el objetivo es solo precargar, la existencia del ImageBitmap ya lo indica.
+        resolve(imageUrl); 
+    } else if (type === 'DECODE_ERROR') {
+        console.warn(`Decodificación con Worker fallida para ${imageUrl}. Fallback.`, error);
+        // Fallback: Si el Worker falla, resolvemos como si hubiéramos fallado 
+        // a decodificar, para que el `Promise.all` continúe.
+        resolve(imageUrl); 
     }
+    
+    activeDecodes.delete(imageUrl);
+};
+// ------------------------------------------------------------------------
+
+const loadResourceOptimized = (fullUrl) => {
+    return new Promise((resolve, reject) => {
+        // --- Lógica del Worker ---
+        // 1. Intentar la decodificación en el Worker
+        activeDecodes.set(fullUrl, [resolve, reject]);
+        imageDecoderWorker.postMessage({ type: 'DECODE_IMAGE', imageUrl: fullUrl });
+
+        // 2. Fallback por si el Worker o la transferencia falla (ej: browser sin Worker)
+        // Aunque la lógica del Worker ya tiene un `resolve` en caso de error para no
+        // detener el `Promise.all`, este fallback general asegura la robustez.
+        // Esto solo es necesario si el worker no se ejecuta. Si el worker falla internamente,
+        // su lógica de `onmessage` con `DECODE_ERROR` se encarga.
+    });
 };
 
-imageWorker.onerror = (error) => {
-    console.error("[PRECARGA WORKER] Error en el Worker de imágenes:", error);
-};
-
-// 4. Función de precarga: Envía rutas relativas y la base
 const preloadAllResources = () => {
     if (typeof menuItems === 'undefined' || !Array.isArray(menuItems)) {
         console.warn("Precarga: 'menuItems' no está disponible. Saltando.");
         return;
     }
 
-    const relativeUrls = menuItems.flatMap(systemName => [
-        BACKGROUND_DIR + systemName + BACKGROUND_EXT,
-        IMAGE_DIR + systemName + IMAGE_EXT
-    ]);
+    // Usamos flatMap para crear la lista de recursos a precargar
+    const loadPromises = menuItems.flatMap(systemName => [
+        BACKGROUND_DIR + systemName + BACKGROUND_EXT, // URL del Fondo
+        IMAGE_DIR + systemName + IMAGE_EXT // URL de la Imagen
+    ]).map(url => loadResourceOptimized(url)); // Llamamos a la función con el Worker
 
-    console.log(`[PRECARGA] Iniciando precarga de ${relativeUrls.length} recursos en el Worker...`);
-    
-    imageWorker.postMessage({
-        type: 'preload',
-        urls: relativeUrls,
-        baseUrl: URL_BASE_CLEANED
-    });
+    console.log(`[PRECARGA] Iniciando precarga de ${loadPromises.length} recursos con Worker...`);
+
+    // Usamos Promise.all para esperar a que todas las decodificaciones/cargas terminen
+    Promise.all(loadPromises)
+        .then(() => console.log("[PRECARGA] Recursos cargados/decodificados con Worker (completado)."))
+        .catch(error => console.error("[PRECARGA] Error CRÍTICO en Promise.all (Worker):", error));
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -74,12 +98,63 @@ const abrirModal = (systemName) => {
     const bgUrl = BACKGROUND_DIR + systemName + BACKGROUND_EXT;
     const formattedName = systemName.replace(/-/g, ' ').toUpperCase();
     
+    // --- Lógica de la imagen usando el Worker para la decodificación ---
+    // En lugar de `modalImage.src = imageUrl;`, usaremos el Worker
+    
+    // 1. Pedir al Worker que decodifique la imagen
+    imageDecoderWorker.postMessage({ type: 'DECODE_IMAGE', imageUrl: imageUrl });
+    
+    // 2. Establecer el título y el fondo inmediatamente
     requestAnimationFrame(() => {
-        modalImage.src = imageUrl;
-        modalImage.alt = systemName;
         modalTitle.textContent = formattedName;
         modalHeader.style.setProperty('--bg-url', `url('${bgUrl}')`);
+        // Mostrar la imagen de carga o dejarla vacía hasta que el Worker responda
+        modalImage.removeAttribute('src'); 
+        modalImage.style.opacity = '0'; // Ocultar hasta que esté lista
     });
+
+    // 3. Esperar la respuesta del Worker para establecer la imagen
+    // Nota: Esto es un ejemplo, se necesita un mecanismo para correlacionar la respuesta
+    // del Worker con el modal actualmente abierto. Usaremos la respuesta global
+    // y solo actualizaremos si la URL coincide con la que estamos intentando cargar.
+    const workerImageSetter = (event) => {
+        const { type, imageUrl: workerUrl, imageBitmap } = event.data;
+        if (type === 'DECODE_COMPLETE' && workerUrl === imageUrl && imageBitmap) {
+            // Convertir ImageBitmap a URL para usar en el src
+            const canvas = document.createElement('canvas');
+            canvas.width = imageBitmap.width;
+            canvas.height = imageBitmap.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(imageBitmap, 0, 0);
+            const dataUrl = canvas.toDataURL();
+
+            // Usar requestAnimationFrame para actualizar el DOM
+            requestAnimationFrame(() => {
+                modalImage.src = dataUrl;
+                modalImage.alt = systemName;
+                modalImage.style.opacity = '1';
+                // Limpiar el ImageBitmap para liberar memoria
+                imageBitmap.close(); 
+            });
+
+            // Una vez que la imagen se ha establecido, eliminar el listener temporal
+            imageDecoderWorker.removeEventListener('message', workerImageSetter);
+        } else if (type === 'DECODE_ERROR' && workerUrl === imageUrl) {
+             // Si hay error, intentar con el método clásico (fallback)
+             console.warn(`Fallback a <img>.src para ${imageUrl}.`);
+             requestAnimationFrame(() => {
+                modalImage.src = imageUrl;
+                modalImage.alt = systemName;
+                modalImage.style.opacity = '1';
+             });
+             imageDecoderWorker.removeEventListener('message', workerImageSetter);
+        }
+    };
+
+    // Añadir un listener temporal específico para esta apertura de modal
+    imageDecoderWorker.addEventListener('message', workerImageSetter);
+    // ----------------------------------------------------------------------
+
 
     setTimeout(() => {
         if (typeof window.loadGameItems === 'function' && typeof window.renderGrid === 'function') {
