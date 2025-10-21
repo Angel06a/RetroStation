@@ -295,7 +295,10 @@ class RuedaDinamica {
 
     _hDUARL(initialLoad = false, oldIsM) { // _hDUARL: _handleDimensionUpdateAndResizeLogic
         const newIsM = this.cMV(); 
-        const shouldRunCalc = initialLoad || newIsM !== oldIsM || this.cR === 0;
+        
+        // CONDICIÓN CORREGIDA: Recalcular si NO es la carga inicial (es un resize),
+        // O si hay cambio de modo móvil, O si el radio no está inicializado.
+        const shouldRunCalc = !initialLoad || newIsM !== oldIsM || this.cR === 0;
 
         if (shouldRunCalc) {
             const dims = this.cbs.calculateAndApplyDimensions(
@@ -319,10 +322,11 @@ class RuedaDinamica {
     }
 
     handleResize = () => {
+        window.updateViewportCache(); // 👈 Esto actualiza las variables de altura/ancho
         if (this.rRI) cancelAnimationFrame(this.rRI);
         const oldIsM = this.isM; 
         this.rRI = requestAnimationFrame(() => {
-            this._hDUARL(false, oldIsM);
+            this._hDUARL(false, oldIsM); // 👈 Esto ahora fuerza el recálculo
             this.rRI = null;
         });
     }
@@ -347,8 +351,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Comprobación de dependencias simplificada
-    if (!(window.abrirModal && window.updateGridSelection && window.calculateAndApplyDimensions)) {
-        console.error("Faltan dependencias externas (utils.js, main-modal-manager.js).");
+    if (!(window.abrirModal && window.updateGridSelection && window.calculateAndApplyDimensions && window.updateViewportCache)) {
+        console.error("Faltan dependencias externas (utils.js, main-modal-manager.js, etc.).");
         return;
     }
 
