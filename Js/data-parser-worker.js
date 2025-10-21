@@ -39,12 +39,16 @@ function parseHyphenList(rawText) {
 self.onmessage = function(event) {
     // El hilo principal envía un objeto con la propiedad 'rawText'
     if (event.data && event.data.type === 'PARSE_DATA') {
+        const { rawText, systemName } = event.data; // <--- CAMBIO AQUÍ: Desestructurar systemName
+        
         try {
-            const items = parseHyphenList(event.data.rawText);
+            const items = parseHyphenList(rawText);
             // Envía los datos parseados de vuelta al hilo principal
             self.postMessage({ type: 'PARSE_COMPLETE', items: items });
         } catch (error) {
-            console.error('Worker: Error durante el parseo de datos:', error);
+            // LOGGING MEJORADO
+            const context = systemName ? ` para ${systemName}` : '';
+            console.error(`Worker: Error durante el parseo de datos${context}:`, error);
             // En caso de error, envía una lista vacía
             self.postMessage({ type: 'PARSE_ERROR', items: [] });
         }
