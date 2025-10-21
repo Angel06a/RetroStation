@@ -1,5 +1,5 @@
 // =========================================================================
-// utils.js: Funciones de Soporte, Cálculo de Dimensiones y Data Parsing (Restaurado para Fallback)
+// utils.js: Funciones de Soporte, Cálculo de Dimensiones y Data Parsing (COMPLETO)
 // =========================================================================
 
 // --- CONSTANTES GLOBALES ---
@@ -23,12 +23,11 @@ function updateViewportCache() {
 }
 updateViewportCache();
 
-// --- 1. PARSEO DE DATOS (RESTAURADO PARA FALLBACK) ---
+// --- 1. PARSEO DE DATOS (PARA FALLBACK) ---
 
 /**
  * Parsea el texto sin procesar (rawText) de la lista de juegos
  * en un array de objetos Game Item.
- * NECESARIO COMO FALLBACK SI EL WEB WORKER NO SE INICIALIZA.
  */
 function parseHyphenList(rawText) {
     if (!rawText) return [];
@@ -130,6 +129,6 @@ function calculateAndApplyDimensions(rueda, opciones, initialAngles, anguloPorOp
 }
 
 // --- 3. EXPOSICIÓN GLOBAL DE UTILIDADES ---
-window.parseHyphenList = parseHyphenList; // <-- RESTAURADO para que el FALLBACK funcione
+window.parseHyphenList = parseHyphenList; 
 window.updateViewportCache = updateViewportCache;
 window.calculateAndApplyDimensions = calculateAndApplyDimensions;
