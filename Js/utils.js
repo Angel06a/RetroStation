@@ -1,5 +1,5 @@
 // =========================================================================
-// utils.js: Funciones de Soporte, Cálculo de Dimensiones (parseHyphenList REMOVIDO)
+// utils.js: Funciones de Soporte, Cálculo de Dimensiones y Data Parsing (Restaurado para Fallback)
 // =========================================================================
 
 // --- CONSTANTES GLOBALES ---
@@ -23,8 +23,45 @@ function updateViewportCache() {
 }
 updateViewportCache();
 
-// --- 1. PARSEO DE DATOS ---
-// **VERIFICACIÓN: La función parseHyphenList debe estar AUSENTE en este archivo.**
+// --- 1. PARSEO DE DATOS (RESTAURADO PARA FALLBACK) ---
+
+/**
+ * Parsea el texto sin procesar (rawText) de la lista de juegos
+ * en un array de objetos Game Item.
+ * NECESARIO COMO FALLBACK SI EL WEB WORKER NO SE INICIALIZA.
+ */
+function parseHyphenList(rawText) {
+    if (!rawText) return [];
+
+    const items = [];
+    // Regex para capturar el texto principal y la URL entre comillas al final
+    const urlRegex = /"([^"]*)"\s*$/; 
+    const lines = rawText.split('\n');
+    
+    for (const line of lines) {
+        const trimmedLine = line.trim();
+
+        if (!trimmedLine.startsWith('-')) continue;
+
+        let content = trimmedLine.substring(1).trim(); // Remueve el guion inicial
+        const match = content.match(urlRegex);
+
+        let url = '';
+        if (match && match[1]) {
+            url = match[1].trim();
+            // Remueve la URL y las comillas del contenido principal
+            content = content.replace(match[0], '').trim(); 
+        }
+
+        if (content) {
+            items.push({
+                title: content,
+                url: url
+            });
+        }
+    }
+    return items;
+}
 
 // --- 2. CÁLCULO DE DIMENSIONES ---
 
@@ -93,6 +130,6 @@ function calculateAndApplyDimensions(rueda, opciones, initialAngles, anguloPorOp
 }
 
 // --- 3. EXPOSICIÓN GLOBAL DE UTILIDADES ---
-
+window.parseHyphenList = parseHyphenList; // <-- RESTAURADO para que el FALLBACK funcione
 window.updateViewportCache = updateViewportCache;
 window.calculateAndApplyDimensions = calculateAndApplyDimensions;
