@@ -1,5 +1,5 @@
 // =========================================================================
-// game-data-loader.js: Carga Asíncrona de Datos (OPTIMIZADO V2 CON WORKER BLOB REVISADO)
+// game-data-loader.js: Carga Asíncrona de Datos (SOLUCIÓN WORKER DEFINITIVA CON URL())
 // =========================================================================
 
 (function () {
@@ -10,81 +10,27 @@
     const A_RATIO = '16/9';
     const G_VAR_N = `currentGameListString`;
 
-    // --- CÓDIGO DEL WORKER INLINADO EN STRING (Escaping revisado) ---
-    // Usamos doble backslash (\\) para que el Worker reciba un solo backslash (\)
-    const workerCode = `
-        function parseHyphenList(rawText) {
-            if (!rawText) return [];
-
-            const items = [];
-            // Regex con backslashes escapados: \\s* -> \s* en el Worker
-            const urlRegex = /"([^"]*)"\\s*$/; 
-            const lines = rawText.split('\\n'); // \n escapado: \\n -> \n en el Worker
-            
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (!trimmedLine.startsWith('-')) continue;
-
-                let content = trimmedLine.substring(1).trim(); 
-                const match = content.match(urlRegex);
-
-                let url = '';
-                if (match && match[1]) {
-                    url = match[1].trim();
-                    content = content.replace(match[0], '').trim(); 
-                }
-
-                if (content) {
-                    items.push({
-                        title: content,
-                        url: url
-                    });
-                }
-            }
-            return items;
-        }
-
-        // Manejador de errores dentro del Worker (para capturar errores de sintaxis o ejecución)
-        self.onerror = (e) => {
-            console.error('Worker Error:', e.message, e.filename, e.lineno);
-        };
-
-        self.onmessage = function(event) {
-            const { type, rawText } = event.data;
-
-            if (type === 'PARSE_GAME_DATA') {
-                try {
-                    const parsedItems = parseHyphenList(rawText); 
-                    self.postMessage({
-                        type: 'PARSE_COMPLETE',
-                        items: parsedItems
-                    });
-                } catch (error) {
-                    console.error('Worker runtime error during parsing:', error);
-                }
-            }
-        };
-    `;
-    // -----------------------------------------------------------------
-
-
-    // --- INICIALIZACIÓN DEL WEB WORKER (vía Blob/URL) ---
+    // --- INICIALIZACIÓN DEL WEB WORKER (RUTA ABSOLUTA GARANTIZADA para GitHub Pages) ---
     let dataParserWorker = null;
     if (window.Worker) {
         try {
-            const blob = new Blob([workerCode], { type: 'application/javascript' });
-            const workerUrl = URL.createObjectURL(blob);
-            dataParserWorker = new Worker(workerUrl); 
-            console.log('✅ Worker inicializado con éxito usando Blob.');
+            // 1. Define la ruta relativa del Worker (desde la ubicación de index.html)
+            const workerRelativePath = 'Js/worker-data-parser.js';
             
-            // Captura errores de comunicación o de inicio del Worker
+            // 2. Combina la URL base (document.baseURI) con la ruta del Worker.
+            // document.baseURI es la forma más robusta de obtener la raíz del *path* actual
+            // (ej: 'https://user.github.io/repo-name/').
+            const workerURL = new URL(workerRelativePath, document.baseURI).href;
+
+            dataParserWorker = new Worker(workerURL); 
+            console.log('✅ Worker inicializado con éxito:', workerURL);
+            
             dataParserWorker.onerror = (e) => {
-                console.error('🚨 Fallo de inicialización del Worker (Hilo Principal):', e);
-                // Si falla en tiempo de ejecución, deshabilitamos el Worker para forzar el fallback
+                console.error('🚨 Fallo de inicialización/ejecución del Worker (Verificar la ruta Network/Consola).', e);
                 dataParserWorker = null; 
             };
         } catch (e) {
-            console.error('❌ Fallo CRÍTICO al inicializar Worker (Blob/URL).', e);
+            console.error('❌ Fallo CRÍTICO al inicializar Worker (New Worker). Forzando Fallback.', e);
             dataParserWorker = null;
         }
     } else {
