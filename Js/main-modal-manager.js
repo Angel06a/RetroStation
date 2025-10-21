@@ -1,5 +1,5 @@
 // =========================================================================
-// main-modal-manager.js: Minificado Leve (Optimizado para CSS Animation) - MODIFICADO
+// main-modal-manager.js: Minificado Leve (Optimizado para CSS Animation)
 // =========================================================================
 
 window.inputLock = false;
@@ -14,51 +14,54 @@ const INPUT_LOCK_DELAY = 200;
 
 let modalOverlay, modalHeader, modalImage, modalTitle, contentGridContainer;
 
+const loadResourceOptimized = (fullUrl) => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const fallbackResolve = () => resolve(fullUrl);
+        const decodeAndResolve = () => {
+            if ('decode' in img) {
+                const decodePromise = img.decode().then(fallbackResolve).catch(error => {
+                    console.warn(`Error al decodificar: ${fullUrl}. Fallback.`, error);
+                    fallbackResolve(); 
+                });
+                
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(() => decodePromise);
+                } else {
+                    setTimeout(() => decodePromise, 0);
+                }
+            } else {
+                setTimeout(fallbackResolve, 0);
+            }
+        };
+        
+        img.onload = () => decodeAndResolve();
+        
+        img.onerror = () => {
+            console.warn(`Error de red: ${fullUrl}. Fallback.`);
+            fallbackResolve();
+        };
+        
+        img.src = fullUrl;
+    });
+};
+
 const preloadAllResources = () => {
     if (typeof menuItems === 'undefined' || !Array.isArray(menuItems)) {
         console.warn("Precarga: 'menuItems' no está disponible. Saltando.");
         return;
     }
 
-    // 🎯 MODIFICACIÓN CLAVE: Convertir rutas relativas a absolutas para el Worker
-    const urlsToPreload = menuItems.flatMap(systemName => [
-        BACKGROUND_DIR + systemName + BACKGROUND_EXT,
-        IMAGE_DIR + systemName + IMAGE_EXT
-    ]).map(relativePath => {
-        // Usa el constructor URL para resolver la ruta relativa contra la URL actual (location.href)
-        // Esto crea una URL absoluta que el Worker puede usar sin ambigüedad.
-        try {
-            return new URL(relativePath, location.href).href;
-        } catch (e) {
-            console.error(`Error al crear URL absoluta para: ${relativePath}`, e);
-            return relativePath; // Fallback, aunque probablemente seguirá fallando.
-        }
-    });
+    const loadPromises = menuItems.flatMap(systemName => [
+        loadResourceOptimized(BACKGROUND_DIR + systemName + BACKGROUND_EXT),
+        loadResourceOptimized(IMAGE_DIR + systemName + IMAGE_EXT)
+    ]);
 
-    console.log(`[PRECARGA] Iniciando precarga de ${urlsToPreload.length} recursos mediante Web Worker...`);
+    console.log(`[PRECARGA] Iniciando precarga de ${loadPromises.length} recursos...`);
 
-    if ('Worker' in window) {
-        const worker = new Worker('./Js/image-decoder-worker.js'); 
-        
-        worker.onmessage = (e) => {
-            if (e.data.type === 'DECODE_COMPLETE') {
-                console.log("[PRECARGA] Recursos cargados/decodificados (completado por Worker).");
-            } else if (e.data.type === 'DECODE_ERROR') {
-                 console.error('[WORKER] Error al decodificar recursos.');
-            }
-            worker.terminate(); 
-        };
-
-        worker.onerror = (error) => {
-            console.error('[WORKER] Error crítico del Web Worker de decodificación:', error);
-        };
-        
-        // Envía la lista de URLs (ahora absolutas) al Worker
-        worker.postMessage({ type: 'DECODE_RESOURCES', urls: urlsToPreload });
-
-    } else {
-        console.warn('[ADVERTENCIA] Web Workers no soportados. Saltando precarga asíncrona de imágenes.');
-    }
+    Promise.all(loadPromises)
+        .then(() => console.log("[PRECARGA] Recursos cargados/decodificados (completado)."))
+        .catch(error => console.error("[PRECARGA] Error CRÍTICO en Promise.all:", error));
 };
 
 document.addEventListener('DOMContentLoaded', () => {
