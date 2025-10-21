@@ -1,5 +1,5 @@
 // =========================================================================
-// main-modal-manager.js: Minificado Leve (Optimizado para CSS Animation y Worker)
+// main-modal-manager.js: Minificado Leve (Optimizado para CSS Animation) - MODIFICADO
 // =========================================================================
 
 window.inputLock = false;
@@ -13,92 +13,10 @@ const MODAL_ANIMATION_DELAY = 300;
 const INPUT_LOCK_DELAY = 200;
 
 let modalOverlay, modalHeader, modalImage, modalTitle, contentGridContainer;
-let imageWorker = null; // Referencia al Web Worker
-let resourceCache = new Map(); // Caché de Object URLs para las imágenes ya cargadas
 
-// Inicializar el Web Worker
-if (window.Worker) {
-    imageWorker = new Worker('./Js/image-loader-worker.js');
-    console.log("[PRECARGA] Worker de imágenes inicializado.");
-}
-
-// Promesa mejorada que usa el Worker si está disponible
-const loadResourceOptimized = (fullUrl, id) => {
-    return new Promise((resolve, reject) => {
-        // 1. Comprobar caché (para evitar recargar un recurso ya cargado)
-        if (resourceCache.has(fullUrl)) {
-            resolve(resourceCache.get(fullUrl));
-            return;
-        }
-
-        // 2. Usar Worker si está disponible (carga asíncrona)
-        if (imageWorker) {
-            
-            // Listener para la respuesta del worker
-            const workerListener = (event) => {
-                const data = event.data;
-                if (data.id !== id) return; // Aseguramos que la respuesta es la que esperamos
-
-                imageWorker.removeEventListener('message', workerListener); // Limpiar el listener
-
-                if (data.success && data.objectURL) {
-                    // El Worker ha cargado la imagen y nos ha dado un Object URL
-                    resourceCache.set(fullUrl, data.objectURL);
-                    resolve(data.objectURL);
-                } else {
-                    console.warn(`Worker falló o no soportado para ${fullUrl}. Cayendo a carga directa.`);
-                    // Fallo del worker o error de red: Usar carga directa (Fallback)
-                    loadResourceDirect(fullUrl).then(resolve).catch(reject);
-                }
-            };
-            
-            imageWorker.addEventListener('message', workerListener);
-            
-            // Enviar la tarea al Worker
-            imageWorker.postMessage({ url: fullUrl, id: id });
-            
-        } else {
-            // 3. Carga Directa (Fallback si Worker no está disponible)
-            console.warn(`Worker no disponible. Cargando ${fullUrl} directamente.`);
-            loadResourceDirect(fullUrl).then(resolve).catch(reject);
-        }
-    });
-};
-
-// Función de carga directa (similar a tu lógica original, pero más simple)
-const loadResourceDirect = (fullUrl) => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        const fallbackResolve = () => resolve(fullUrl); // Resuelve con la URL original
-        
-        const decodeAndResolve = () => {
-            if ('decode' in img) {
-                // Decodificación en requestIdleCallback/setTimeout
-                const decodePromise = img.decode().then(fallbackResolve).catch(error => {
-                    console.warn(`Error al decodificar: ${fullUrl}. Fallback.`, error);
-                    fallbackResolve(); 
-                });
-                
-                if ('requestIdleCallback' in window) {
-                    requestIdleCallback(() => decodePromise);
-                } else {
-                    setTimeout(() => decodePromise, 0);
-                }
-            } else {
-                setTimeout(fallbackResolve, 0);
-            }
-        };
-        
-        img.onload = () => decodeAndResolve();
-        img.onerror = () => {
-            console.warn(`Error de red: ${fullUrl}. Fallback.`);
-            fallbackResolve();
-        };
-        
-        img.src = fullUrl;
-    });
-};
-
+// **NOTA:** La función loadResourceOptimized original ha sido removida/adaptada,
+// y su lógica de carga/decodificación movida a image-decoder-worker.js.
+// Aquí solo necesitamos un array de URLs para enviar al Worker.
 
 const preloadAllResources = () => {
     if (typeof menuItems === 'undefined' || !Array.isArray(menuItems)) {
@@ -106,26 +24,43 @@ const preloadAllResources = () => {
         return;
     }
 
-    let resourceId = 0;
-    const loadPromises = menuItems.flatMap(systemName => {
-        const bgUrl = BACKGROUND_DIR + systemName + BACKGROUND_EXT;
-        const imageUrl = IMAGE_DIR + systemName + IMAGE_EXT;
+    const urlsToPreload = menuItems.flatMap(systemName => [
+        BACKGROUND_DIR + systemName + BACKGROUND_EXT,
+        IMAGE_DIR + systemName + IMAGE_EXT
+    ]);
 
-        // Utilizamos un ID único para cada par de promesa/mensaje al worker
-        return [
-            loadResourceOptimized(bgUrl, resourceId++),
-            loadResourceOptimized(imageUrl, resourceId++)
-        ];
-    });
+    console.log(`[PRECARGA] Iniciando precarga de ${urlsToPreload.length} recursos mediante Web Worker...`);
 
-    console.log(`[PRECARGA] Iniciando precarga de ${loadPromises.length} recursos con Worker...`);
+    if ('Worker' in window) {
+        // --- INICIO: USO DEL WEB WORKER PARA LA DECODIFICACIÓN ---
+        // Usa el nuevo worker para delegar la carga y decodificación.
+        const worker = new Worker('./Js/image-decoder-worker.js'); 
+        
+        worker.onmessage = (e) => {
+            if (e.data.type === 'DECODE_COMPLETE') {
+                console.log("[PRECARGA] Recursos cargados/decodificados (completado por Worker).");
+            } else if (e.data.type === 'DECODE_ERROR') {
+                 console.error('[WORKER] Error al decodificar recursos.');
+            }
+            worker.terminate(); // Termina el Worker una vez completado
+        };
 
-    Promise.all(loadPromises)
-        .then(() => console.log("[PRECARGA] Recursos cargados/decodificados (completado)."))
-        .catch(error => console.error("[PRECARGA] Error CRÍTICO en Promise.all:", error));
+        worker.onerror = (error) => {
+            console.error('[WORKER] Error crítico del Web Worker de decodificación:', error);
+        };
+        
+        // Envía la lista de URLs al Worker
+        worker.postMessage({ type: 'DECODE_RESOURCES', urls: urlsToPreload });
+        // --- FIN: USO DEL WEB WORKER PARA LA DECODIFICACIÓN ---
+
+    } else {
+        // Fallback si Web Worker no es soportado (caso muy raro)
+        console.warn('[ADVERTENCIA] Web Workers no soportados. Saltando precarga asíncrona de imágenes.');
+    }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Usamos requestIdleCallback o setTimeout para no bloquear la interacción inicial
     if ('requestIdleCallback' in window) {
         requestIdleCallback(preloadAllResources);
     } else {
@@ -144,16 +79,14 @@ const abrirModal = (systemName) => {
     const bgUrl = BACKGROUND_DIR + systemName + BACKGROUND_EXT;
     const formattedName = systemName.replace(/-/g, ' ').toUpperCase();
     
-    // 1. Obtener URLs de la caché (pueden ser Object URLs o URLs originales)
-    const finalImageUrl = resourceCache.get(imageUrl) || imageUrl;
-    const finalBgUrl = resourceCache.get(bgUrl) || bgUrl;
-    
+    // La imagen y el fondo se establecen inmediatamente. 
+    // Como se precargaron/decodificaron en el worker, deberían aparecer casi al instante
+    // si ya estaban en caché o en memoria.
     requestAnimationFrame(() => {
-        // 2. Usar las URLs optimizadas
-        modalImage.src = finalImageUrl;
+        modalImage.src = imageUrl;
         modalImage.alt = systemName;
         modalTitle.textContent = formattedName;
-        modalHeader.style.setProperty('--bg-url', `url('${finalBgUrl}')`);
+        modalHeader.style.setProperty('--bg-url', `url('${bgUrl}')`);
     });
 
     setTimeout(() => {
