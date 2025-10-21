@@ -1,7 +1,21 @@
-const STATIC_CACHE_NAME = 'retrostation-static-v3'; // Incrementamos la versión para forzar la actualización
-const RUNTIME_CACHE_NAME = 'retrostation-runtime-v2';
+const STATIC_CACHE_NAME = 'retrostation-static-v4'; // ¡VERSIÓN INCREMENTADA!
+const RUNTIME_CACHE_NAME = 'retrostation-runtime-v3'; // ¡VERSIÓN INCREMENTADA!
+
+// Lista de sistemas para generar URLs
+const menuItems = [
+    "3ds", "bios", "dos", "dreamcast", "gamegear", "gb", "gba", "gbc", "gc", "mame", "megadrive",
+    "n64", "naomi2", "nds", "nes", "ps2", "ps3", "psp", "psx", "saturn", "snes", "snes-msu",
+    "wii", "wiiu", "xbox"
+];
+
+// Generación de URLs de iconos (Sistemas/*.svg)
+const systemIcons = menuItems.map(item => `./Sistemas/${item}.svg`);
+// Generación de URLs de fondos (Fondos/*.jpg)
+const systemBackgrounds = menuItems.map(item => `./Fondos/${item}.jpg`);
+
 
 // 1. Archivos Críticos (App Shell) - Cacheo prioritario y obligatorio
+// Incluye el Shell y todos los iconos de sistemas
 const criticalUrlsToCache = [
     './',
     './index.html',
@@ -21,18 +35,21 @@ const criticalUrlsToCache = [
     './Js/mediafire-downloader.js',
     './Js/game-details-logic.js',
     './Js/ui-logic.js',
-    './Js/data-parser-worker.js' // AÑADIDO: Worker Script
+    './Js/data-parser-worker.js',
+    // === NUEVOS ICONOS DE SISTEMAS AÑADIDOS AL CACHE CRÍTICO (SVG) ===
+    ...systemIcons
 ];
 
 // 2. Archivos No Críticos (Imágenes Grandes) - Cacheo en segundo plano
+// Incluye el fondo por defecto y todos los fondos de sistemas
 const nonCriticalImageCache = [
-    './Fondos/psx.jpg' // Esto se precachea aquí.
-    // Añade aquí otros fondos si son cruciales para el inicio.
+    './Fondos/psx.jpg', // Fondo por defecto
+    // === NUEVOS FONDOS DE SISTEMAS AÑADIDOS AL CACHE NO CRÍTICO (JPG) ===
+    ...systemBackgrounds
 ];
 
 
 // Instalación: Divide el cacheo en dos tareas asíncronas.
-// El cacheo de recursos críticos debe completarse antes de que el SW esté instalado.
 self.addEventListener('install', event => {
     // 1. Tarea Principal (Crítica): Debe completarse para instalar el SW.
     const criticalCachePromise = caches.open(STATIC_CACHE_NAME)
@@ -42,24 +59,22 @@ self.addEventListener('install', event => {
         });
 
     // 2. Tarea Secundaria (No Crítica): El cacheo de imágenes grandes se hace después.
-    // Esto asegura que las peticiones de red por imágenes no bloqueen la instalación del shell,
-    // pero se maneja de forma asíncrona dentro del hilo del SW.
     const imageCachePromise = caches.open(RUNTIME_CACHE_NAME)
         .then(cache => {
             console.log('Service Worker: Cacheando imágenes grandes en segundo plano');
             return cache.addAll(nonCriticalImageCache).catch(error => {
-                // Es importante manejar errores aquí para que un fallo en una imagen no detenga el SW
+                // Manejar errores para que un fallo en una imagen no detenga el SW
                 console.warn('Error al cachear imágenes no críticas:', error);
             });
         });
 
-    // Esperamos por las promesas críticas. La promesa de la imagen está separada.
+    // Esperamos por las promesas críticas.
     event.waitUntil(
         Promise.all([criticalCachePromise, imageCachePromise])
     );
 });
 
-// Activación: Elimina cachés antiguas (igual que antes)
+// Activación: Elimina cachés antiguas
 self.addEventListener('activate', event => {
     const cacheWhitelist = [STATIC_CACHE_NAME, RUNTIME_CACHE_NAME];
     event.waitUntil(
@@ -76,7 +91,7 @@ self.addEventListener('activate', event => {
     );
 });
 
-// Fetch: Estrategias de cacheo (igual que antes, ya optimizadas)
+// Fetch: Estrategias de cacheo (sin cambios en la lógica, solo se benefician de las nuevas URLs)
 self.addEventListener('fetch', event => {
     const requestUrl = new URL(event.request.url);
 
@@ -109,7 +124,7 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Estrategia Network-First para el resto
+    // Estrategia Network-First para el resto (incluye los archivos de datos de juegos Games/*.js)
     event.respondWith(
         fetch(event.request).catch(() => caches.match(event.request))
     );
