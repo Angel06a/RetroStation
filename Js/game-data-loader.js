@@ -1,5 +1,5 @@
 // =========================================================================
-// game-data-loader.js: Carga Asíncrona de Datos y Renderizado del Grid (Optimizado para CSS Animation - Minificado Leve)
+// game-data-loader.js: Carga Asíncrona de Datos y Renderizado del Grid (Worker Integrado)
 // =========================================================================
 
 (function () {
@@ -9,6 +9,15 @@
     const I_EXT_WEBP = ".webp";
     const A_RATIO = '16/9';
     const G_VAR_N = `currentGameListString`;
+    
+    // --- INICIALIZACIÓN DEL WEB WORKER ---
+    let dataParserWorker = null;
+    if (window.Worker) {
+        // Inicializa el Worker que vive en el nuevo archivo: worker-data-parser.js
+        dataParserWorker = new Worker('./Js/worker-data-parser.js'); 
+    }
+    // -----------------------------------------------------------------
+
 
     function loadGameItems(systemName, callback) {
         if (dCache[systemName]) {
@@ -25,116 +34,126 @@
             let items = [];
             const rawText = window[G_VAR_N];
 
-            if (typeof rawText === 'string' && window.parseHyphenList) {
-                items = window.parseHyphenList(rawText);
+            if (typeof rawText === 'string') {
+                if (dataParserWorker) {
+                    // **USO DEL WORKER**: Envía el texto crudo para procesamiento asíncrono
+                    dataParserWorker.onmessage = function(event) {
+                        if (event.data.type === 'PARSE_COMPLETE') {
+                            items = event.data.items;
+                            completeProcessing(items);
+                            // Limpia el onmessage después de su uso (evita múltiples llamadas)
+                            dataParserWorker.onmessage = null; 
+                        }
+                    };
+                    dataParserWorker.postMessage({ type: 'PARSE_GAME_DATA', rawText });
+                    return; // Importante: Salimos, la ejecución se reanudará en dataParserWorker.onmessage
+                } else if (window.parseHyphenList) {
+                    // FALLBACK (Si Worker no está disponible, ej. IE o configuración estricta)
+                    console.warn(`[ADVERTENCIA] Web Workers no soportados. Usando parseHyphenList en hilo principal.`);
+                    items = window.parseHyphenList(rawText);
+                } else {
+                     console.warn(`[ADVERTENCIA] La variable global ${G_VAR_N} no se encontró o no hay método de parseo.`);
+                }
             } else {
-                 console.warn(`[ADVERTENCIA] La variable global ${G_VAR_N} no se encontró o parseHyphenList no está disponible.`);
+                 console.warn(`[ADVERTENCIA] La variable global ${G_VAR_N} no se encontró o no hay método de parseo.`);
             }
             
+            // Si el Worker no se usó (solo por fallback), completamos el procesamiento aquí
+            completeProcessing(items);
+        };
+
+        const completeProcessing = (items) => {
             if (window.hasOwnProperty(G_VAR_N)) {
-                delete window[G_VAR_N];
+                 try {
+                     delete window[G_VAR_N];
+                 } catch (e) { /* En navegadores estrictos esto falla. Ignoramos */ }
             }
+
+            if (script.parentNode) script.parentNode.removeChild(script);
 
             dCache[systemName] = items;
-            
-            requestAnimationFrame(() => {
-                callback(items);
-                scriptElement.remove(); 
-            });
+            callback(items);
         };
 
-        script.onload = () => {
-            if ('requestIdleCallback' in window) {
-                requestIdleCallback(() => processData(script));
-            } else {
-                setTimeout(() => processData(script), 0);
-            }
-        };
-
-        script.onerror = () => {
-            console.error(`[ERROR] 🚨 No se pudo cargar el archivo de datos: ${scriptUrl}.`);
-            dCache[systemName] = [];
-            
-            setTimeout(() => {
-                callback([]);
-                script.remove();
-            }, 0);
+        script.onload = () => processData(script);
+        script.onerror = (e) => {
+            console.error(`[ERROR] Fallo al cargar script de datos: ${scriptUrl}`, e);
+            processData(script); 
         };
 
         document.head.appendChild(script);
     }
 
     function createGridItem(item, systemNameLower, index) {
-        
-        const imgBase = item.name;
-        const imgFileThumb = imgBase + "-thumb";
-        const imgUrl = `${G_DIR}${systemNameLower}/${imgFileThumb}${I_EXT_WEBP}`;
-        const cleanName = window.cleanGameName ? window.cleanGameName(item.name) : item.name;
-
         const itemEl = document.createElement('li');
         itemEl.classList.add('grid-item');
-        itemEl.dataset.index = index;
+        itemEl.setAttribute('role', 'gridcell');
+        itemEl.setAttribute('tabindex', index === 0 ? '0' : '-1');
+        itemEl.setAttribute('data-index', index);
+        itemEl.setAttribute('aria-label', item.title);
+        itemEl.setAttribute('data-url', item.url);
+        itemEl.setAttribute('data-title', item.title);
 
-        const titleEl = document.createElement('div');
-        titleEl.classList.add('grid-item-title');
-        titleEl.textContent = cleanName;
+        // Prepara la URL de la imagen
+        const imageUrl = `Covers/${systemNameLower}/${item.title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}${I_EXT_WEBP}`;
 
-        const imgEl = document.createElement('img');
-        imgEl.classList.add('grid-item-image', 'is-loading'); 
-        imgEl.src = L_SVG;
-        imgEl.alt = item.name;
-        imgEl.title = item.name;
-        imgEl.style.aspectRatio = A_RATIO; 
+        // Contenedor de la imagen (para mantener el aspect ratio en el layout)
+        const imageContainer = document.createElement('div');
+        imageContainer.classList.add('grid-item-image-container');
+        
+        const img = document.createElement('img');
+        img.classList.add('grid-item-image', 'is-loading');
+        img.src = L_SVG; // Muestra el SVG de carga inicialmente
+        img.alt = `Portada de ${item.title}`;
+        img.setAttribute('loading', 'lazy'); // 👈 Optimizamos la carga de imágenes aquí
 
-        const preloader = new Image();
+        // Usa decode para cargar la imagen en un hilo secundario
+        const actualImg = new Image();
+        actualImg.src = imageUrl;
 
-        preloader.addEventListener('load', function() {
-            requestAnimationFrame(() => {
-                imgEl.src = imgUrl;
-                imgEl.style.aspectRatio = `${this.naturalWidth} / ${this.naturalHeight}`;
-                imgEl.style.objectFit = 'cover';
-                imgEl.style.padding = '0';
-                imgEl.classList.remove('is-loading');
-            });
-        });
-
-        preloader.addEventListener('error', function() {
-            requestAnimationFrame(() => {
-                imgEl.alt = `Error al cargar portada para ${item.name}`;
-                console.warn(`[ERROR IMAGEN] No se pudo cargar la imagen para: ${item.name}`);
-                imgEl.classList.remove('is-loading'); 
-            });
-        });
-
-        preloader.src = imgUrl;
-
-        itemEl.addEventListener('click', () => {
-            const clickIndex = parseInt(itemEl.dataset.index, 10);
-            
-            if (window.isCenteringActive !== undefined) window.isCenteringActive = true;
-            if (typeof window.updateGridSelection === 'function') {
-                requestAnimationFrame(() => {
-                    window.updateGridSelection(clickIndex, true, false, false);
+        actualImg.onload = () => {
+            if ('decode' in actualImg) {
+                actualImg.decode().then(() => {
+                    requestAnimationFrame(() => {
+                        img.src = imageUrl;
+                        img.classList.remove('is-loading');
+                    });
+                }).catch(() => {
+                    // Fallback si decode falla
+                    requestAnimationFrame(() => {
+                        img.src = imageUrl;
+                        img.classList.remove('is-loading');
+                    });
+                });
+            } else {
+                 // Fallback para navegadores antiguos
+                 requestAnimationFrame(() => {
+                    img.src = imageUrl;
+                    img.classList.remove('is-loading');
                 });
             }
+        };
 
-            const finalImgUrl = imgEl.classList.contains('is-loading') 
-                ? L_SVG 
-                : imgUrl;
-                
-            if (typeof window.abrirDetallesJuego === 'function') {
-                window.abrirDetallesJuego(item.name, finalImgUrl, item.url);
-            }
-        });
+        actualImg.onerror = () => {
+             // Fallback a la imagen de loading si la portada falla
+             console.warn(`Fallo al cargar la portada: ${imageUrl}`);
+        };
 
-        itemEl.appendChild(imgEl);
+        imageContainer.appendChild(img);
+
+        const titleEl = document.createElement('p');
+        titleEl.classList.add('grid-item-title');
+        titleEl.textContent = item.title;
+
+        itemEl.appendChild(imageContainer);
         itemEl.appendChild(titleEl);
 
         return itemEl;
     }
 
-    function renderGrid(items, systemName, contentGridContainer, modalTitle) {
-        const systemNameLower = systemName.toLowerCase();
+    function renderGameGrid(items, systemName, systemNameLower, modalTitle) {
+        const contentGridContainer = document.getElementById('content-grid-container');
+        if (!contentGridContainer) return;
 
         contentGridContainer.innerHTML = '';
         if (window.gridItemsElements) window.gridItemsElements = []; 
@@ -172,6 +191,7 @@
     }
 
     window.loadGameItems = loadGameItems;
-    window.renderGrid = renderGrid;
+    window.renderGameGrid = renderGameGrid;
+    // No exponemos createGridItem globalmente si no es estrictamente necesario.
 
 })();
