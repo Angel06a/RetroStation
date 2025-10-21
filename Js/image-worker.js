@@ -1,10 +1,10 @@
 // =========================================================================
-// image-worker.js: Web Worker ahora construye la URL absoluta
+// image-worker.js: Modificado para manejar SVG sin decodificación Bitmap
 // =========================================================================
 
 // Usamos el evento 'message' para la comunicación con el Main Thread
 self.onmessage = async (e) => {
-    const { type, urls, baseUrl } = e.data; // Recibimos la baseUrl aquí
+    const { type, urls, baseUrl } = e.data; 
 
     if (type === 'preload' && urls && Array.isArray(urls) && baseUrl) {
         await preloadImages(urls, baseUrl);
@@ -16,8 +16,10 @@ async function preloadImages(relativeUrls, baseUrl) {
     const loadPromises = relativeUrls.map(relativeUrl => {
         // 1. CONSTRUIMOS LA URL ABSOLUTA dentro del Worker
         const absoluteUrl = new URL(relativeUrl, baseUrl).href;
+        // 2. Comprobamos si es un SVG
+        const isSvg = relativeUrl.toLowerCase().endsWith('.svg');
 
-        // 2. Ejecutamos la promesa con la URL ABSOLUTA
+        // 3. Ejecutamos la promesa con la URL ABSOLUTA
         return fetch(absoluteUrl)
             .then(response => {
                 if (!response.ok) {
@@ -25,15 +27,24 @@ async function preloadImages(relativeUrls, baseUrl) {
                 }
                 return response.blob();
             })
-            // Decodificación de la imagen (la tarea intensiva de CPU)
-            .then(blob => createImageBitmap(blob))
-            .then(bitmap => {
-                // Notificamos usando la ruta original o la absoluta para referencia
+            // AHORA: Manejamos la decodificación condicionalmente
+            .then(blob => {
+                if (isSvg) {
+                    // Los SVG son XML. Si los cargamos, ya quedan en caché. 
+                    // No intentamos usar createImageBitmap, que podría fallar.
+                    console.log(`[WORKER] SVG detectado (${relativeUrl}). Solo precarga HTTP, omitiendo decodificación Bitmap.`);
+                    return blob; // Retornamos el blob o cualquier valor que simule el éxito
+                } else {
+                    // Decodificación de la imagen (JPG, PNG, WebP)
+                    return createImageBitmap(blob);
+                }
+            })
+            .then(() => { // El paso anterior retorna el Blob o el Bitmap (ambos resuelven la promesa)
+                // Notificamos usando la ruta original
                 self.postMessage({ status: 'loaded', relativeUrl: relativeUrl });
                 return { success: true, url: relativeUrl };
             })
             .catch(error => {
-                // Notificará la URL que falló
                 console.warn(`[WORKER] Error al precargar/decodificar ${absoluteUrl} (Ruta relativa: ${relativeUrl}):`, error);
                 return { success: false, url: relativeUrl, error: error.message };
             });
