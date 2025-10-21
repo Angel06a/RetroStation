@@ -1,5 +1,5 @@
 // =========================================================================
-// utils.js: Funciones de Soporte, Cálculo de Dimensiones y Data Parsing (COMPLETO)
+// utils.js: Funciones de Soporte, Cálculo de Dimensiones y Data Parsing (Optimizado)
 // =========================================================================
 
 // --- CONSTANTES GLOBALES ---
@@ -23,76 +23,59 @@ function updateViewportCache() {
 }
 updateViewportCache();
 
-// --- 1. PARSEO DE DATOS (PARA FALLBACK) ---
+// --- 1. PARSEO DE DATOS ---
 
-/**
- * Parsea el texto sin procesar (rawText) de la lista de juegos
- * en un array de objetos Game Item.
- */
-function parseHyphenList(rawText) {
-    if (!rawText) return [];
+// La función parseHyphenList fue eliminada y movida a data-parser-worker.js
 
-    const items = [];
-    // Regex para capturar el texto principal y la URL entre comillas al final
-    const urlRegex = /"([^"]*)"\s*$/; 
-    const lines = rawText.split('\n');
-    
-    for (const line of lines) {
-        const trimmedLine = line.trim();
-
-        if (!trimmedLine.startsWith('-')) continue;
-
-        let content = trimmedLine.substring(1).trim(); // Remueve el guion inicial
-        const match = content.match(urlRegex);
-
-        let url = '';
-        if (match && match[1]) {
-            url = match[1].trim();
-            // Remueve la URL y las comillas del contenido principal
-            content = content.replace(match[0], '').trim(); 
-        }
-
-        if (content) {
-            items.push({
-                title: content,
-                url: url
-            });
-        }
-    }
-    return items;
+function cleanGameName(name) {
+    const index = name.indexOf('(');
+    return index > -1 ? name.substring(0, index).trim() : name;
 }
 
-// --- 2. CÁLCULO DE DIMENSIONES ---
+// --- 2. CÁLCULO DE VISTA Y DIMENSIONES ---
+
+function getGridColumns() {
+    const width = cachedViewportWidth || window.innerWidth;
+    
+    switch (true) {
+        case width > 1920: return 8;
+        case width > 1600: return 7;
+        case width > 1440: return 6;
+        case width > 1280: return 5;
+        case width > 900: return 4;
+        case width > 600: return 3;
+        default: return 2;
+    }
+}
 
 function calculateWheelMetrics(anguloPorOpcion, totalOpciones) {
-    const windowH = cachedViewportHeight;
-    const windowW = cachedViewportWidth;
+    const { 
+        ITEM_VH_CALC_FACTOR, ITEM_WIDTH_FACTOR, TARGET_GAP_RATIO, 
+        MIN_RADIUS_RATIO, EXTRA_MARGIN_RATIO 
+    } = WHEEL_CONSTANTS;
 
-    const angleRad = anguloPorOpcion * DEG_TO_RAD_FACTOR;
-    const itemHeight = Math.min(windowH * WHEEL_CONSTANTS.ITEM_VH_CALC_FACTOR, 100);
-    const itemWidth = itemHeight * WHEEL_CONSTANTS.ITEM_WIDTH_FACTOR;
+    const viewportHeight = cachedViewportHeight || window.innerHeight;
 
-    const A = itemWidth * 0.5;
-    const B = itemHeight * 0.5;
+    const itemHeight = viewportHeight * ITEM_VH_CALC_FACTOR;
+    const itemWidth = itemHeight * ITEM_WIDTH_FACTOR;
 
-    let C;
-    if (Math.abs(angleRad) > 1e-6) {
-        C = (A * Math.sin(angleRad) - B * Math.cos(angleRad)) / Math.cos(angleRad) + B;
-    } else {
-        C = B; 
+    const targetCenterToCenter = itemHeight * (1 + TARGET_GAP_RATIO);
+
+    let requiredRadius = 0;
+    if (totalOpciones > 0) {
+        const anguloRadianes = anguloPorOpcion * DEG_TO_RAD_FACTOR;
+        const sinAngulo = Math.sin(anguloRadianes); 
+        
+        requiredRadius = sinAngulo > 1e-6 
+            ? Math.ceil(targetCenterToCenter / sinAngulo)
+            : Infinity;
     }
-    
-    const requiredRadius = (A + C) / Math.sin(angleRad);
-    let currentRadius = requiredRadius * WHEEL_CONSTANTS.TARGET_GAP_RATIO; 
 
-    const maxRadiusBasedOnWidth = (windowW / 2) - (itemWidth * WHEEL_CONSTANTS.EXTRA_MARGIN_RATIO);
-    currentRadius = Math.min(currentRadius, maxRadiusBasedOnWidth);
+    const radioMinimoBase = viewportHeight * MIN_RADIUS_RATIO;
+    const currentRadius = Math.max(radioMinimoBase, requiredRadius);
 
-    const minRadius = windowH * WHEEL_CONSTANTS.MIN_RADIUS_RATIO;
-    currentRadius = Math.max(currentRadius, minRadius);
-
-    const ruedaTamano = 2 * currentRadius + itemWidth * 2;
-    const posicionLeft = currentRadius + itemWidth / 2;
+    const ruedaTamano = currentRadius * 2;
+    const posicionLeft = -(currentRadius * (1 + EXTRA_MARGIN_RATIO));
 
     return { itemHeight, itemWidth, currentRadius, ruedaTamano, posicionLeft };
 }
@@ -128,7 +111,10 @@ function calculateAndApplyDimensions(rueda, opciones, initialAngles, anguloPorOp
     return { currentRadius: R };
 }
 
-// --- 3. EXPOSICIÓN GLOBAL DE UTILIDADES ---
-window.parseHyphenList = parseHyphenList; 
-window.updateViewportCache = updateViewportCache;
+// --- 3. EXPOSICIÓN GLOBAL DE FUNCIONES ---
+window.getGridColumns = getGridColumns; 
+// window.parseHyphenList = parseHyphenList; // Eliminada la exposición global
+window.cleanGameName = cleanGameName;
 window.calculateAndApplyDimensions = calculateAndApplyDimensions;
+window.DEG_TO_RAD_FACTOR = DEG_TO_RAD_FACTOR;
+window.updateViewportCache = updateViewportCache;
