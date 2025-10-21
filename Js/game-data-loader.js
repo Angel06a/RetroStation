@@ -5,12 +5,12 @@
 (function () {
     const dCache = {};
     const G_DIR = "Games/";
-    const L_SVG = "Icons/loading.svg"; // Placeholder (spinner)
+    const L_SVG = "Icons/loading.svg";
     const I_EXT_WEBP = ".webp";
     const A_RATIO = '16/9';
     const G_VAR_N = `currentGameListString`;
 
-    function loadGameItems(systemName, callback) {
+    function loadGameItems(systemName, callback) { // systemName es 'systemName'
         if (dCache[systemName]) {
             requestAnimationFrame(() => callback(dCache[systemName]));
             return;
@@ -43,13 +43,13 @@
             let items = [];
             
             if ('Worker' in window) {
-                const worker = new Worker('./Js/data-parser-worker.js'); 
+                const worker = new Worker('./Js/data-parser-worker.js'); // Crea una instancia del Worker
                 
                 worker.onmessage = (e) => {
                     if (e.data.type === 'PARSE_COMPLETE') {
                         items = e.data.items;
                     } else if (e.data.type === 'PARSE_ERROR') {
-                         console.error(`[WORKER] Error al recibir datos parseados para ${systemName}.`);
+                         console.error(`[WORKER] Error al recibir datos parseados para ${systemName}.`); // LOGGING MEJORADO
                     }
                     
                     dCache[systemName] = items;
@@ -57,11 +57,11 @@
                         callback(items);
                         scriptElement.remove(); 
                     });
-                    worker.terminate(); 
+                    worker.terminate(); // Termina el Worker una vez completado
                 };
 
                 worker.onerror = (error) => {
-                    console.error(`[WORKER] Error crítico del Web Worker para ${systemName}:`, error);
+                    console.error(`[WORKER] Error crítico del Web Worker para ${systemName}:`, error); // LOGGING MEJORADO
                     dCache[systemName] = [];
                     requestAnimationFrame(() => {
                         callback([]);
@@ -69,16 +69,18 @@
                     });
                 };
                 
+                // Envía el texto a parsear Y el nombre del sistema al Worker
                 worker.postMessage({ 
                     type: 'PARSE_DATA', 
                     rawText: rawText,
-                    systemName: systemName 
+                    systemName: systemName // <--- CAMBIO AQUÍ: Se añade el nombre del sistema
                 });
 
             } else {
+                // Fallback si Web Worker no es soportado (caso muy raro en navegadores modernos)
                 console.warn('[ADVERTENCIA] Web Workers no soportados. Usando hilo principal.');
                 
-                dCache[systemName] = items; 
+                dCache[systemName] = items; // items es []
                 requestAnimationFrame(() => {
                     callback(items);
                     scriptElement.remove(); 
@@ -108,43 +110,7 @@
 
         document.head.appendChild(script);
     }
-    
-    // =====================================================================
-    // Lógica de Carga de Imagen Pospuesta (Lazy Loading)
-    // =====================================================================
-    function lazyLoadImage(imgEl) {
-        const imgUrl = imgEl.dataset.src;
-        // Evita cargar si ya se está cargando o ya terminó
-        if (!imgUrl || imgEl.dataset.loaded === 'true') return;
-
-        imgEl.dataset.loaded = 'true'; // Marcar como cargando
-
-        const preloader = new Image();
-
-        preloader.addEventListener('load', function() {
-            requestAnimationFrame(() => {
-                imgEl.src = imgUrl;
-                // Usar las dimensiones reales para mejorar el layout
-                imgEl.style.aspectRatio = `${this.naturalWidth} / ${this.naturalHeight}`;
-                imgEl.style.objectFit = 'cover';
-                imgEl.style.padding = '0';
-                imgEl.classList.remove('is-loading');
-            });
-        });
-
-        preloader.addEventListener('error', function() {
-            requestAnimationFrame(() => {
-                imgEl.alt = `Error al cargar portada para ${imgEl.title}`; 
-                console.warn(`[ERROR IMAGEN] Lazy Load fallido para: ${imgEl.title}`);
-                imgEl.classList.remove('is-loading'); 
-            });
-        });
-        
-        // Iniciar la carga de la imagen real
-        preloader.src = imgUrl;
-    }
-
-
+// ... (resto de funciones sin modificar: createGridItem, renderGrid) ...
     function createGridItem(item, systemNameLower, index) {
         
         const imgBase = item.name;
@@ -162,13 +128,32 @@
 
         const imgEl = document.createElement('img');
         imgEl.classList.add('grid-item-image', 'is-loading'); 
-        imgEl.src = L_SVG; // Mantiene el spinner
+        imgEl.src = L_SVG;
         imgEl.alt = item.name;
         imgEl.title = item.name;
         imgEl.style.aspectRatio = A_RATIO; 
-        
-        // Almacenar URL real en data-src
-        imgEl.dataset.src = imgUrl;
+
+        const preloader = new Image();
+
+        preloader.addEventListener('load', function() {
+            requestAnimationFrame(() => {
+                imgEl.src = imgUrl;
+                imgEl.style.aspectRatio = `${this.naturalWidth} / ${this.naturalHeight}`;
+                imgEl.style.objectFit = 'cover';
+                imgEl.style.padding = '0';
+                imgEl.classList.remove('is-loading');
+            });
+        });
+
+        preloader.addEventListener('error', function() {
+            requestAnimationFrame(() => {
+                imgEl.alt = `Error al cargar portada para ${item.name}`;
+                console.warn(`[ERROR IMAGEN] No se pudo cargar la imagen para: ${item.name}`);
+                imgEl.classList.remove('is-loading'); 
+            });
+        });
+
+        preloader.src = imgUrl;
 
         itemEl.addEventListener('click', () => {
             const clickIndex = parseInt(itemEl.dataset.index, 10);
@@ -182,7 +167,7 @@
 
             const finalImgUrl = imgEl.classList.contains('is-loading') 
                 ? L_SVG 
-                : imgEl.dataset.src; 
+                : imgUrl;
                 
             if (typeof window.abrirDetallesJuego === 'function') {
                 window.abrirDetallesJuego(item.name, finalImgUrl, item.url);
@@ -195,13 +180,8 @@
         return itemEl;
     }
 
-    // =====================================================================
-    // MEJORA: Renderizado por Lotes (Batch Rendering) y Lazy Loading
-    // =====================================================================
     function renderGrid(items, systemName, contentGridContainer, modalTitle) {
         const systemNameLower = systemName.toLowerCase();
-        const BATCH_SIZE = 50; 
-        let gridElementsLocal = [];
 
         contentGridContainer.innerHTML = '';
         if (window.gridItemsElements) window.gridItemsElements = []; 
@@ -215,70 +195,28 @@
 
         const grid = document.createElement('ul');
         grid.classList.add('content-grid');
-        contentGridContainer.appendChild(grid);
+        const fragment = document.createDocumentFragment();
+
+        let gridElementsLocal = [];
+
+        items.forEach((item, index) => {
+            const itemEl = createGridItem(item, systemNameLower, index);
+            fragment.appendChild(itemEl);
+            gridElementsLocal.push(itemEl);
+        });
         
-        // Función recursiva para el renderizado por lotes
-        function processBatch(startIndex) {
-            const endIndex = Math.min(startIndex + BATCH_SIZE, items.length);
-            const fragment = document.createDocumentFragment();
+        grid.appendChild(fragment);
 
-            for (let i = startIndex; i < endIndex; i++) {
-                const item = items[i];
-                const itemEl = createGridItem(item, systemNameLower, i);
-                fragment.appendChild(itemEl);
-                gridElementsLocal.push(itemEl);
-            }
+        requestAnimationFrame(() => {
+            contentGridContainer.appendChild(grid);
             
-            grid.appendChild(fragment);
+            if (window.gridItemsElements) window.gridItemsElements = gridElementsLocal;
 
-            if (endIndex < items.length) {
-                requestAnimationFrame(() => processBatch(endIndex));
-            } else {
-                // Renderizado completado: Actualizar la lista global y la selección
-                if (window.gridItemsElements) window.gridItemsElements = gridElementsLocal;
-
-                if (gridElementsLocal.length > 0 && typeof window.updateGridSelection === 'function') {
-                    window.updateGridSelection(0, true, true, true);
-                }
-                
-                // Inicializar Intersection Observer para Lazy Loading
-                if ('IntersectionObserver' in window) {
-                    // Cargar imágenes 1500px antes de que el elemento entre en la vista
-                    const observer = new IntersectionObserver((entries, obs) => {
-                        entries.forEach(entry => {
-                            if (entry.isIntersecting) {
-                                const imgEl = entry.target.querySelector('.grid-item-image');
-                                if (imgEl) {
-                                    lazyLoadImage(imgEl);
-                                }
-                                obs.unobserve(entry.target); 
-                            }
-                        });
-                    }, {
-                        root: null, 
-                        rootMargin: '0px 0px 1500px 0px', // <--- CAMBIO CLAVE AQUÍ: Aumenta el margen inferior
-                        threshold: 0
-                    });
-                    
-                    // Observar todos los elementos del grid
-                    gridElementsLocal.forEach(itemEl => observer.observe(itemEl));
-                } else {
-                    // Fallback para navegadores antiguos
-                    console.warn('[ADVERTENCIA] IntersectionObserver no soportado. Cargando todas las imágenes.');
-                    gridElementsLocal.forEach(itemEl => {
-                        const imgEl = itemEl.querySelector('.grid-item-image');
-                        if (imgEl) lazyLoadImage(imgEl);
-                    });
-                }
+            if (gridElementsLocal.length > 0 && typeof window.updateGridSelection === 'function') {
+                window.updateGridSelection(0, true, true, true);
             }
-        }
-
-        // Iniciar el renderizado en el siguiente frame de animación
-        requestAnimationFrame(() => processBatch(0));
+        });
     }
-    // =====================================================================
-    // FIN MEJORA
-    // =====================================================================
 
     window.loadGameItems = loadGameItems;
     window.renderGrid = renderGrid;
