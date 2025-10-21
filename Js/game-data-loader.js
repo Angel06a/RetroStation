@@ -1,5 +1,5 @@
 // =========================================================================
-// game-data-loader.js: Carga Asíncrona de Datos y Renderizado del Grid (Worker Integrado)
+// game-data-loader.js: Carga Asíncrona de Datos (OPTIMIZADO PARA COMPATIBILIDAD MÓVIL CON BLOB WORKER)
 // =========================================================================
 
 (function () {
@@ -9,12 +9,70 @@
     const I_EXT_WEBP = ".webp";
     const A_RATIO = '16/9';
     const G_VAR_N = `currentGameListString`;
-    
-    // --- INICIALIZACIÓN DEL WEB WORKER ---
+
+    // --- CÓDIGO DEL WORKER INLINADO EN STRING (para máxima compatibilidad) ---
+    const workerCode = `
+        // Este código se ejecuta en el hilo del Worker.
+        function parseHyphenList(rawText) {
+            if (!rawText) return [];
+
+            const items = [];
+            const urlRegex = /"([^"]*)"\\s*$/; 
+            const lines = rawText.split('\\n');
+            
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+
+                if (!trimmedLine.startsWith('-')) continue;
+
+                let content = trimmedLine.substring(1).trim(); 
+                const match = content.match(urlRegex);
+
+                let url = '';
+                if (match && match[1]) {
+                    url = match[1].trim();
+                    content = content.replace(match[0], '').trim(); 
+                }
+
+                if (content) {
+                    items.push({
+                        title: content,
+                        url: url
+                    });
+                }
+            }
+            return items;
+        }
+
+        self.onmessage = function(event) {
+            const { type, rawText } = event.data;
+
+            if (type === 'PARSE_GAME_DATA') {
+                const parsedItems = parseHyphenList(rawText); 
+                self.postMessage({
+                    type: 'PARSE_COMPLETE',
+                    items: parsedItems
+                });
+            }
+        };
+    `;
+    // -------------------------------------------------------------------------
+
+
+    // --- INICIALIZACIÓN DEL WEB WORKER (vía Blob/URL) ---
     let dataParserWorker = null;
     if (window.Worker) {
-        // Inicializa el Worker que vive en el nuevo archivo: worker-data-parser.js
-        dataParserWorker = new Worker('./Js/worker-data-parser.js'); 
+        try {
+            // 1. Crea un Blob con el código del Worker
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            // 2. Crea una URL de Objeto para el Blob
+            const workerUrl = URL.createObjectURL(blob);
+            // 3. Inicializa el Worker
+            dataParserWorker = new Worker(workerUrl); 
+        } catch (e) {
+            console.error('⚠️ CRÍTICO: Fallo al inicializar Worker usando Blob.', e);
+            // dataParserWorker permanece en null, lo que forzará el fallback más abajo.
+        }
     }
     // -----------------------------------------------------------------
 
@@ -41,15 +99,15 @@
                         if (event.data.type === 'PARSE_COMPLETE') {
                             items = event.data.items;
                             completeProcessing(items);
-                            // Limpia el onmessage después de su uso (evita múltiples llamadas)
+                            // Limpia el onmessage después de su uso 
                             dataParserWorker.onmessage = null; 
                         }
                     };
                     dataParserWorker.postMessage({ type: 'PARSE_GAME_DATA', rawText });
-                    return; // Importante: Salimos, la ejecución se reanudará en dataParserWorker.onmessage
+                    return; // Salimos. La ejecución se reanudará en dataParserWorker.onmessage
                 } else if (window.parseHyphenList) {
-                    // FALLBACK (Si Worker no está disponible, ej. IE o configuración estricta)
-                    console.warn(`[ADVERTENCIA] Web Workers no soportados. Usando parseHyphenList en hilo principal.`);
+                    // FALLBACK (Si Worker no se pudo crear, usamos la función síncrona, debe ser una función global)
+                    console.warn(`[ADVERTENCIA] Fallback al hilo principal.`);
                     items = window.parseHyphenList(rawText);
                 } else {
                      console.warn(`[ADVERTENCIA] La variable global ${G_VAR_N} no se encontró o no hay método de parseo.`);
@@ -58,7 +116,7 @@
                  console.warn(`[ADVERTENCIA] La variable global ${G_VAR_N} no se encontró o no hay método de parseo.`);
             }
             
-            // Si el Worker no se usó (solo por fallback), completamos el procesamiento aquí
+            // Si el Worker no se usó (por fallback), completamos el procesamiento aquí
             completeProcessing(items);
         };
 
@@ -66,7 +124,7 @@
             if (window.hasOwnProperty(G_VAR_N)) {
                  try {
                      delete window[G_VAR_N];
-                 } catch (e) { /* En navegadores estrictos esto falla. Ignoramos */ }
+                 } catch (e) { /* Ignoramos */ }
             }
 
             if (script.parentNode) script.parentNode.removeChild(script);
@@ -94,20 +152,17 @@
         itemEl.setAttribute('data-url', item.url);
         itemEl.setAttribute('data-title', item.title);
 
-        // Prepara la URL de la imagen
         const imageUrl = `Covers/${systemNameLower}/${item.title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}${I_EXT_WEBP}`;
 
-        // Contenedor de la imagen (para mantener el aspect ratio en el layout)
         const imageContainer = document.createElement('div');
         imageContainer.classList.add('grid-item-image-container');
         
         const img = document.createElement('img');
         img.classList.add('grid-item-image', 'is-loading');
-        img.src = L_SVG; // Muestra el SVG de carga inicialmente
+        img.src = L_SVG; 
         img.alt = `Portada de ${item.title}`;
-        img.setAttribute('loading', 'lazy'); // 👈 Optimizamos la carga de imágenes aquí
+        img.setAttribute('loading', 'lazy'); 
 
-        // Usa decode para cargar la imagen en un hilo secundario
         const actualImg = new Image();
         actualImg.src = imageUrl;
 
@@ -119,14 +174,12 @@
                         img.classList.remove('is-loading');
                     });
                 }).catch(() => {
-                    // Fallback si decode falla
                     requestAnimationFrame(() => {
                         img.src = imageUrl;
                         img.classList.remove('is-loading');
                     });
                 });
             } else {
-                 // Fallback para navegadores antiguos
                  requestAnimationFrame(() => {
                     img.src = imageUrl;
                     img.classList.remove('is-loading');
@@ -135,7 +188,6 @@
         };
 
         actualImg.onerror = () => {
-             // Fallback a la imagen de loading si la portada falla
              console.warn(`Fallo al cargar la portada: ${imageUrl}`);
         };
 
@@ -192,6 +244,5 @@
 
     window.loadGameItems = loadGameItems;
     window.renderGameGrid = renderGameGrid;
-    // No exponemos createGridItem globalmente si no es estrictamente necesario.
 
 })();
