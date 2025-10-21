@@ -1,44 +1,43 @@
 // =========================================================================
-// image-worker.js: Web Worker para la precarga y decodificación de imágenes
+// image-worker.js: Web Worker ahora construye la URL absoluta
 // =========================================================================
 
 // Usamos el evento 'message' para la comunicación con el Main Thread
 self.onmessage = async (e) => {
-    const { type, urls } = e.data;
+    const { type, urls, baseUrl } = e.data; // Recibimos la baseUrl aquí
 
-    if (type === 'preload' && urls && Array.isArray(urls)) {
-        await preloadImages(urls);
+    if (type === 'preload' && urls && Array.isArray(urls) && baseUrl) {
+        await preloadImages(urls, baseUrl);
     }
 };
 
 // Función principal de precarga
-async function preloadImages(urls) {
-    const loadPromises = urls.map(url => 
-        // Usamos fetch para obtener el recurso como blob
-        fetch(url)
+async function preloadImages(relativeUrls, baseUrl) {
+    const loadPromises = relativeUrls.map(relativeUrl => {
+        // 1. CONSTRUIMOS LA URL ABSOLUTA dentro del Worker
+        const absoluteUrl = new URL(relativeUrl, baseUrl).href;
+
+        // 2. Ejecutamos la promesa con la URL ABSOLUTA
+        return fetch(absoluteUrl)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`Error HTTP: ${response.status}`);
                 }
                 return response.blob();
             })
-            // Usamos createImageBitmap para decodificar el blob en el worker.
-            // Esto es la parte intensiva de CPU que se delega.
+            // Decodificación de la imagen (la tarea intensiva de CPU)
             .then(blob => createImageBitmap(blob))
             .then(bitmap => {
-                // Notificamos que un recurso fue cargado (opcional)
-                self.postMessage({ status: 'loaded', url: url });
-                
-                // Opcionalmente, puedes cerrar el bitmap si no lo vas a transferir
-                // bitmap.close(); 
-                
-                return { success: true, url: url };
+                // Notificamos usando la ruta original o la absoluta para referencia
+                self.postMessage({ status: 'loaded', relativeUrl: relativeUrl });
+                return { success: true, url: relativeUrl };
             })
             .catch(error => {
-                console.warn(`[WORKER] Error al precargar/decodificar ${url}:`, error);
-                return { success: false, url: url, error: error.message };
-            })
-    );
+                // Notificará la URL que falló
+                console.warn(`[WORKER] Error al precargar/decodificar ${absoluteUrl} (Ruta relativa: ${relativeUrl}):`, error);
+                return { success: false, url: relativeUrl, error: error.message };
+            });
+    });
 
     await Promise.allSettled(loadPromises);
 
