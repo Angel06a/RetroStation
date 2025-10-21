@@ -10,7 +10,7 @@
     const A_RATIO = '16/9';
     const G_VAR_N = `currentGameListString`;
 
-    function loadGameItems(systemName, callback) { // systemName es 'systemName'
+    function loadGameItems(systemName, callback) {
         if (dCache[systemName]) {
             requestAnimationFrame(() => callback(dCache[systemName]));
             return;
@@ -49,7 +49,7 @@
                     if (e.data.type === 'PARSE_COMPLETE') {
                         items = e.data.items;
                     } else if (e.data.type === 'PARSE_ERROR') {
-                         console.error(`[WORKER] Error al recibir datos parseados para ${systemName}.`); // LOGGING MEJORADO
+                         console.error(`[WORKER] Error al recibir datos parseados para ${systemName}.`);
                     }
                     
                     dCache[systemName] = items;
@@ -61,7 +61,7 @@
                 };
 
                 worker.onerror = (error) => {
-                    console.error(`[WORKER] Error crítico del Web Worker para ${systemName}:`, error); // LOGGING MEJORADO
+                    console.error(`[WORKER] Error crítico del Web Worker para ${systemName}:`, error);
                     dCache[systemName] = [];
                     requestAnimationFrame(() => {
                         callback([]);
@@ -73,7 +73,7 @@
                 worker.postMessage({ 
                     type: 'PARSE_DATA', 
                     rawText: rawText,
-                    systemName: systemName // <--- CAMBIO AQUÍ: Se añade el nombre del sistema
+                    systemName: systemName 
                 });
 
             } else {
@@ -110,7 +110,7 @@
 
         document.head.appendChild(script);
     }
-// ... (resto de funciones sin modificar: createGridItem, renderGrid) ...
+
     function createGridItem(item, systemNameLower, index) {
         
         const imgBase = item.name;
@@ -180,8 +180,13 @@
         return itemEl;
     }
 
+    // =====================================================================
+    // MEJORA: Renderizado por Lotes (Batch Rendering) para evitar Lag
+    // =====================================================================
     function renderGrid(items, systemName, contentGridContainer, modalTitle) {
         const systemNameLower = systemName.toLowerCase();
+        const BATCH_SIZE = 50; // Crea hasta 50 elementos por frame para evitar bloqueo
+        let gridElementsLocal = [];
 
         contentGridContainer.innerHTML = '';
         if (window.gridItemsElements) window.gridItemsElements = []; 
@@ -195,28 +200,42 @@
 
         const grid = document.createElement('ul');
         grid.classList.add('content-grid');
-        const fragment = document.createDocumentFragment();
-
-        let gridElementsLocal = [];
-
-        items.forEach((item, index) => {
-            const itemEl = createGridItem(item, systemNameLower, index);
-            fragment.appendChild(itemEl);
-            gridElementsLocal.push(itemEl);
-        });
+        contentGridContainer.appendChild(grid);
         
-        grid.appendChild(fragment);
+        // Función recursiva para el renderizado por lotes
+        function processBatch(startIndex) {
+            const endIndex = Math.min(startIndex + BATCH_SIZE, items.length);
+            const fragment = document.createDocumentFragment();
 
-        requestAnimationFrame(() => {
-            contentGridContainer.appendChild(grid);
-            
-            if (window.gridItemsElements) window.gridItemsElements = gridElementsLocal;
-
-            if (gridElementsLocal.length > 0 && typeof window.updateGridSelection === 'function') {
-                window.updateGridSelection(0, true, true, true);
+            for (let i = startIndex; i < endIndex; i++) {
+                const item = items[i];
+                const itemEl = createGridItem(item, systemNameLower, i);
+                fragment.appendChild(itemEl);
+                gridElementsLocal.push(itemEl);
             }
-        });
+            
+            // Adjuntar el fragmento al DOM en un solo paso
+            grid.appendChild(fragment);
+
+            if (endIndex < items.length) {
+                // Si aún quedan elementos, programar el siguiente lote para el próximo frame
+                requestAnimationFrame(() => processBatch(endIndex));
+            } else {
+                // Renderizado completado: Actualizar la lista global y la selección
+                if (window.gridItemsElements) window.gridItemsElements = gridElementsLocal;
+
+                if (gridElementsLocal.length > 0 && typeof window.updateGridSelection === 'function') {
+                    window.updateGridSelection(0, true, true, true);
+                }
+            }
+        }
+
+        // Iniciar el renderizado en el siguiente frame de animación
+        requestAnimationFrame(() => processBatch(0));
     }
+    // =====================================================================
+    // FIN MEJORA
+    // =====================================================================
 
     window.loadGameItems = loadGameItems;
     window.renderGrid = renderGrid;
