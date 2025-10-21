@@ -1,5 +1,5 @@
 // =========================================================================
-// main-modal-manager.js: Modificado para enviar rutas relativas y la BASE_URL
+// main-modal-manager.js: CONSERVADO (Lógica de URL Base y envío al Worker)
 // =========================================================================
 
 window.inputLock = false;
@@ -14,14 +14,8 @@ const INPUT_LOCK_DELAY = 200;
 
 let modalOverlay, modalHeader, modalImage, modalTitle, contentGridContainer;
 
-// 1. OBTENER LA BASE PATH: Obtenemos la base para que el Worker pueda construir la URL.
-// Usaremos la ruta absoluta hasta el directorio de scripts para tener una referencia
-// consistente, o simplemente '/' si estuviera en la raíz.
-// Para GitHub Pages: Si estás en https://angel06a.github.io/RetroStation/index.html
-// La base que necesitamos es generalmente "/RetroStation/" o "". 
-// La forma más segura es usar la URL base limpia del documento (angel06a.github.io/RetroStation/)
+// 1. OBTENER LA BASE PATH: 
 const BASE_URL_FULL = document.baseURI || window.location.href;
-// Aseguramos que la base termine en '/' y no tenga el index.html
 const URL_BASE_CLEANED = BASE_URL_FULL.substring(0, BASE_URL_FULL.lastIndexOf('/') + 1);
 
 // 2. Inicializar el Web Worker
@@ -40,14 +34,13 @@ imageWorker.onerror = (error) => {
     console.error("[PRECARGA WORKER] Error en el Worker de imágenes:", error);
 };
 
-// 4. Función de precarga: Ahora solo envía rutas relativas
+// 4. Función de precarga: Envía rutas relativas y la base
 const preloadAllResources = () => {
     if (typeof menuItems === 'undefined' || !Array.isArray(menuItems)) {
         console.warn("Precarga: 'menuItems' no está disponible. Saltando.");
         return;
     }
 
-    // Aquí solo enviamos las rutas relativas (como siempre las hemos usado)
     const relativeUrls = menuItems.flatMap(systemName => [
         BACKGROUND_DIR + systemName + BACKGROUND_EXT,
         IMAGE_DIR + systemName + IMAGE_EXT
@@ -55,11 +48,10 @@ const preloadAllResources = () => {
 
     console.log(`[PRECARGA] Iniciando precarga de ${relativeUrls.length} recursos en el Worker...`);
     
-    // Enviar las rutas relativas Y la URL base al worker
     imageWorker.postMessage({
         type: 'preload',
         urls: relativeUrls,
-        baseUrl: URL_BASE_CLEANED // Le pasamos la base del Main Thread
+        baseUrl: URL_BASE_CLEANED
     });
 };
 
@@ -72,12 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeDOMReferences();
 });
 
-// El resto de funciones (abrirModal, cerrarModal, initializeDOMReferences)
-// permanecen igual ya que usan las rutas relativas para el DOM.
-
 const abrirModal = (systemName) => {
     if (window.inputLock || !modalOverlay) return;
-    // ... (código abreviado para concisión)
+
     window.inputLock = true;
     console.log(`-> abrirModal() llamado para: ${systemName}`);
 
@@ -117,7 +106,7 @@ const abrirModal = (systemName) => {
 
 const cerrarModal = () => {
     if (window.inputLock || !modalOverlay) return;
-    // ... (código abreviado para concisión)
+
     window.inputLock = true;
     modalOverlay.classList.remove('open');
 
