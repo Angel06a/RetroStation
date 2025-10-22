@@ -35,7 +35,6 @@ const criticalUrlsToCache = [
     './Js/mediafire-downloader.js',
     './Js/game-details-logic.js',
     './Js/ui-logic.js',
-    './Js/data-parser-worker.js',
     // === ICONOS DE SISTEMAS EN CACHE CRÍTICO ===
     ...systemIcons
 ];
@@ -129,3 +128,4 @@ self.addEventListener('fetch', event => {
         fetch(event.request).catch(() => caches.match(event.request))
     );
 });
+
