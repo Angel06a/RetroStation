@@ -1,0 +1,30 @@
+// data.js
+const menuItems = [
+    "3ds",
+    "bios",
+    "dos",
+    "dreamcast",
+    "gamegear",
+    "gb",
+    "gba",
+    "gbc",
+    "gc",
+    "mame",
+    "megadrive",
+    "n64",
+    "naomi2",
+    "nds",
+    "nes",
+    "ps2",
+    "ps3",
+    "psp",
+    "psx",
+    "saturn",
+    "snes",
+    "snes-msu",
+    "wii",
+    "wiiu",
+    "xbox"
+    // Asegúrate de que las imágenes se llamen "home.webp", "settings.webp", etc.,
+    // y estén en la carpeta "Sistemas/".
+];
