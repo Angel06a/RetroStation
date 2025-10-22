@@ -1,5 +1,5 @@
 // =========================================================================
-// game-data-loader.js: Carga Asíncrona de Datos y Renderizado del Grid (OPTIMIZADO V2)
+// game-data-loader.js: Carga Asíncrona de Datos y Renderizado del Grid (Optimizado para CSS Animation - Minificado Leve)
 // =========================================================================
 
 (function () {
@@ -12,7 +12,6 @@
 
     function loadGameItems(systemName, callback) {
         if (dCache[systemName]) {
-            // Optimización: Si está en caché, usar RAF para asegurar que el callback se ejecuta en el próximo repaint.
             requestAnimationFrame(() => callback(dCache[systemName]));
             return;
         }
@@ -23,8 +22,6 @@
         script.src = scriptUrl;
 
         const processData = (scriptElement) => {
-            // Optimización: El procesamiento de texto crudo (`parseHyphenList`) es costoso. 
-            // Esto se mantiene en requestIdleCallback/setTimeout(0) para priorizar la UI.
             let items = [];
             const rawText = window[G_VAR_N];
 
@@ -40,7 +37,6 @@
 
             dCache[systemName] = items;
             
-            // Optimización: Llamada al callback dentro de RAF para sincronizar la renderización.
             requestAnimationFrame(() => {
                 callback(items);
                 scriptElement.remove(); 
@@ -75,7 +71,6 @@
         const imgUrl = `${G_DIR}${systemNameLower}/${imgFileThumb}${I_EXT_WEBP}`;
         const cleanName = window.cleanGameName ? window.cleanGameName(item.name) : item.name;
 
-        // Creación del DOM fuera del RAF, solo la inserción de imágenes está en RAF
         const itemEl = document.createElement('li');
         itemEl.classList.add('grid-item');
         itemEl.dataset.index = index;
@@ -94,7 +89,6 @@
         const preloader = new Image();
 
         preloader.addEventListener('load', function() {
-            // Optimización: Agrupar todas las mutaciones de DOM dentro de un único RAF
             requestAnimationFrame(() => {
                 imgEl.src = imgUrl;
                 imgEl.style.aspectRatio = `${this.naturalWidth} / ${this.naturalHeight}`;
@@ -158,7 +152,6 @@
 
         let gridElementsLocal = [];
 
-        // Llenado del Fragmento (Rápido, fuera de RAF)
         items.forEach((item, index) => {
             const itemEl = createGridItem(item, systemNameLower, index);
             fragment.appendChild(itemEl);
@@ -167,17 +160,13 @@
         
         grid.appendChild(fragment);
 
-        // Optimización: Inserción final en el DOM dentro de RAF
         requestAnimationFrame(() => {
             contentGridContainer.appendChild(grid);
             
             if (window.gridItemsElements) window.gridItemsElements = gridElementsLocal;
 
             if (gridElementsLocal.length > 0 && typeof window.updateGridSelection === 'function') {
-                // Optimización: Se asegura que la selección inicial también sea asíncrona (si es necesario)
-                requestAnimationFrame(() => {
-                    window.updateGridSelection(0, true, true, true);
-                });
+                window.updateGridSelection(0, true, true, true);
             }
         });
     }
