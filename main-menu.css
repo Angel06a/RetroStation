@@ -1,0 +1,208 @@
+/* main-menu.css - CSS CRÍTICO OPTIMIZADO V3 MINIFICADO LIGERAMENTE */
+html {
+    box-sizing: border-box;
+}
+
+*, *::before, *::after {
+    box-sizing: inherit;
+}
+
+:root {
+    --color-bg-base: #333;
+    --color-bg-modal: #222;
+    --color-bg-darkest: #1a1a1a;
+    --color-text-light: #f1f1f1;
+    --color-text-white: #fff;
+    --color-text-dark: #1a1a1a;
+    --color-accent: #FFA500;
+    --color-accent-hover: #FF8C00;
+    --color-button-gray-light: #AAAAAA;
+    --grid-columns: 8;
+    --mobile-padding: 10px;
+    --rueda-tamano: 0px;
+    --posicion-left: 0px;
+    --rueda-rotacion-actual: 0deg;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    background-color: var(--color-bg-base);
+    font-family: Arial, sans-serif;
+    position: relative;
+    overflow: hidden;
+}
+
+#background-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+}
+
+.background-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    transition: opacity 0.5s ease;
+}
+
+.rueda {
+    width: var(--rueda-tamano);
+    height: var(--rueda-tamano);
+    border-radius: 50%;
+    position: fixed;
+    top: 50%;
+    left: var(--posicion-left);
+    transform: translateY(-50%) rotate(var(--rueda-rotacion-actual));
+    transition: transform 0.2s ease-out;
+    will-change: transform;
+}
+
+.opcion {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background-color: transparent;
+    border-radius: 0;
+    cursor: pointer;
+    z-index: 10;
+    transition: transform 0.2s ease-out;
+    --x-offset: 0px;
+    --y-offset: 0px;
+    left: calc(50% + var(--x-offset));
+    top: calc(50% + var(--y-offset));
+    transform: translate(-50%, -50%) rotate(calc(var(--rueda-rotacion-actual) * -1));
+    will-change: transform;
+}
+
+.opcion.seleccionada {
+    z-index: 11;
+}
+
+.opcion img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: transform 0.3s ease-out, filter 0.3s ease-out;
+    will-change: transform, filter;
+    transform: translateZ(0);
+}
+
+.opcion.seleccionada img {
+    transform: scale(1.3) translateX(30px) translateZ(0);
+    filter: drop-shadow(0 4px 15px rgba(0, 0, 0, 0.6));
+}
+
+.modal-overlay, .game-details-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    visibility: hidden;
+    justify-content: center;
+    align-items: center;
+    transition: opacity 0.3s ease-in-out, visibility 0.3s;
+    will-change: opacity;
+}
+
+.modal-overlay.open, .game-details-overlay.open {
+    display: flex;
+    visibility: visible;
+    opacity: 1;
+}
+
+.modal-overlay {
+    background-color: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+}
+
+/* --- CINTA VERTICAL (MÓVILES) --- */
+@media (max-width: 768px) {
+    body {
+        overflow-y: auto;
+        align-items: flex-start;
+        justify-content: center;
+    }
+
+    #rueda {
+        position: relative!important;
+        width: 100%!important;
+        height: auto!important;
+        left: 0!important;
+        top: 0!important;
+        transform: none!important;
+        border-radius: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 10px 0;
+        overflow-y: scroll;
+        overflow-x: hidden;
+        max-height: 100vh;
+        transition: none!important;
+        transform: translateZ(0)!important;
+        will-change: transform;
+    }
+
+    .opcion {
+        position: relative;
+        left: auto!important;
+        top: auto!important;
+        transform: none!important;
+        will-change: auto;
+        width: 150px!important;
+        height: 150px!important;
+        margin-bottom: 5px;
+        background-color: transparent!important;
+        box-shadow: none!important;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+    }
+
+    .opcion img {
+        width: 130px!important;
+        height: 130px!important;
+        min-width: 130px;
+        transform: none!important;
+        filter: none!important;
+        transition: transform 0.2s ease-out, filter 0.2s ease-out;
+        will-change: transform, filter;
+    }
+
+    .opcion.seleccionada {
+        background-color: transparent!important;
+        transform: none!important;
+        box-shadow: none!important;
+        z-index: auto;
+    }
+
+    .opcion.seleccionada img {
+         transform: scale(1.2) translateZ(0)!important;
+         filter: drop-shadow(0 0 10px var(--color-accent))!important;
+    }
+
+    .opcion::after {
+        content: none!important;
+        display: none!important;
+    }
+}
