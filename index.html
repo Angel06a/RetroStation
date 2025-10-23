@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>RetroStation</title>
+    
     <meta name="description" content="RetroStation, una interfaz de menú moderna y rápida para emuladores y juegos retro. Explora, navega y descarga tus clásicos favoritos.">
     <link rel="canonical" href="https://angel06a.github.io/RetroStation/">
     
     <meta property="og:title" content="RetroStation: Menú de Juegos Retro">
-    <meta property="og:description" content="Una interfaz de menú moderna y rápida para emuladores y juegos retro.">
+    <meta property="og:description" content="Una interfaz de menú moderna y rápida para emuladores y juegos retro. Explora, navega y descarga tus clásicos favoritos.">
     <meta property="og:url" content="https://angel06a.github.io/RetroStation/">
     <meta property="og:image" content="https://angel06a.github.io/RetroStation/Fondos/psx.jpg"> 
     <meta property="og:type" content="website">
@@ -20,7 +21,6 @@
     <link rel="icon" href="Icons/favicon.png" type="image/png">
     
     <link rel="manifest" href="manifest.json">
-    
     <link rel="preconnect" href="https://www.mediafire.com" crossorigin>
 
     <link rel="stylesheet" href="main-menu.css">
@@ -33,32 +33,39 @@
     
     <link rel="preload" href="Js/data.js" as="script">
     <link rel="preload" href="Js/utils.js" as="script">
-    <link rel="preload" href="Js/game-data-loader.js" as="script">
     <link rel="preload" href="Js/main-modal-manager.js" as="script">
+    <link rel="preload" href="Js/game-data-loader.js" as="script">
+    <link rel="preload" href="Js/game-grid-nav.js" as="script">
+    <link rel="preload" href="Js/mediafire-downloader.js" as="script">
+    <link rel="preload" href="Js/game-details-logic.js" as="script">
     <link rel="preload" href="Js/ui-logic.js" as="script">
 
-    </head>
+</head>
 <body data-modal-open="false">
-    <div id="background-container"></div>
+    
+    <div id="background-container" aria-hidden="true"></div>
+    
     <main id="rueda" class="rueda" role="navigation" tabindex="0" aria-label="Menú principal de sistemas de juegos"></main>
+    
     <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div id="modal-content" class="modal-content" role="document">
             <header id="modal-header" class="modal-header">
                 <button id="modal-close" class="modal-close" aria-label="Cerrar menú de juegos y volver al principal">
-                    <img src="Icons/back.svg" alt="Icono de flecha de retorno" title="Cerrar menú" />
+                    <img src="Icons/back.svg" alt="Icono de flecha de retorno" title="Cerrar menú" aria-hidden="true" />
                 </button>
                 <img id="modal-image" src="" alt="Imagen de cabecera del sistema de juego seleccionado" />
             </header>
             <div class="modal-body">
+                <h2 id="modal-title" class="modal-title-text"></h2>
                 <div id="content-grid-container" class="content-grid-container" role="grid" aria-labelledby="modal-title" aria-label="Cuadrícula de juegos del sistema seleccionado"></div>
-                <h2 id="modal-title"></h2>
             </div>
         </div>
     </div>
+    
     <div id="game-details-overlay" class="game-details-overlay" role="dialog" aria-modal="true" aria-labelledby="game-details-title" aria-hidden="true">
         <div id="game-details-content" class="game-details-content" role="document">
             <button id="game-details-close" class="game-details-close" aria-label="Cerrar detalles del juego y volver a la lista">
-                <img src="Icons/back.svg" alt="Icono de flecha de retorno" title="Cerrar detalles" />
+                <img src="Icons/back.svg" alt="Icono de flecha de retorno" title="Cerrar detalles" aria-hidden="true" />
             </button>
             <div class="game-details-header">
                 <img id="game-details-image" src="" alt="Portada del juego seleccionado" />
@@ -98,7 +105,7 @@
     <noscript>
         <style>
             .rueda, .modal-overlay, .game-details-overlay { display: none; }
-            body::before { content: "Esta aplicación requiere JavaScript para funcionar."; display: block; padding: 20px; text-align: center; color: white; background: red; }
+            body::before { content: "Esta aplicación requiere JavaScript para funcionar. Por favor, habilita JavaScript en tu navegador."; display: block; padding: 20px; text-align: center; color: white; background: red; font-size: 1.2em; position: fixed; top: 0; left: 0; width: 100%; z-index: 9999; }
         </style>
     </noscript>
 </body>
