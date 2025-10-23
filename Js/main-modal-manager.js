@@ -1,5 +1,7 @@
 // =========================================================================
 // main-modal-manager.js: Minificado Leve (Optimizado para CSS Animation - OPTIMIZADO V2)
+// Se ha mejorado la gestión de carga y renderizado para reducir la carga de CPU
+// al mover las tareas pesadas de renderizado de grid a requestIdleCallback.
 // =========================================================================
 
 window.inputLock = false;
@@ -86,50 +88,50 @@ const abrirModal = (systemName) => {
     const bgUrl = BACKGROUND_DIR + systemName + BACKGROUND_EXT;
     const formattedName = systemName.replace(/-/g, ' ').toUpperCase();
     
-    // Optimización: Todas las mutaciones de DOM para abrir/configurar el modal están en un RAF
+    // 1. **Optimización con requestAnimationFrame (RAF):**
+    // Todas las mutaciones DOM para la animación de apertura se hacen aquí,
+    // garantizando que no se bloquee el thread principal.
     requestAnimationFrame(() => {
+        // A. Preparación visual rápida
         modalImage.src = imageUrl;
         modalImage.alt = systemName;
         modalTitle.textContent = formattedName;
-        // Uso de setProperty para aprovechar CSS variables/transitions si existen
         modalHeader.style.setProperty('--bg-url', `url('${bgUrl}')`);
+        
+        // B. Activación del modal (Clases/Display)
+        modalOverlay.style.display = 'flex';
+        void modalOverlay.offsetWidth; // Forzar reflow para transición
+        modalOverlay.classList.add('open');
+        document.body.setAttribute('data-modal-open', 'true');
     });
 
-    // OPTIMIZACIÓN CPU: Usar requestIdleCallback para la carga y renderizado del grid.
-    // Esto asegura que la costosa carga de datos y creación de muchos elementos DOM
-    // NO bloquee la animación de apertura del modal.
+    // 2. **Optimización con requestIdleCallback (RIC):**
+    // La carga de datos (I/O) y el renderizado (CPU intensivo por DOM)
+    // se mueven al periodo de inactividad, desacoplando completamente el
+    // trabajo pesado de la animación de apertura.
     const loadAndRender = () => {
         if (typeof window.loadGameItems === 'function' && typeof window.renderGrid === 'function') {
             window.loadGameItems(systemName, (items) => {
                 console.log(`[CARGA ASÍNCRONA] Lista cargada y renderizada para ${systemName}.`);
-                // RenderGrid ya usa RAF internamente para la inserción final
+                // renderGrid ya usa RAF internamente para la inserción final del grid
                 window.renderGrid(items, systemName, contentGridContainer, modalTitle);
             });
         }
     };
     
     if ('requestIdleCallback' in window) {
-        // Ejecutar en el próximo periodo de inactividad
         requestIdleCallback(loadAndRender);
     } else {
-        // Fallback rápido
-        setTimeout(loadAndRender, 10);
+        setTimeout(loadAndRender, 10); // Fallback: pequeño timeout para no bloquear
     }
 
     if (centeringCheckIntervalId) clearInterval(centeringCheckIntervalId);
-    // 500ms es un buen intervalo para el centrado, se mantiene.
+    // Mantenemos el intervalo para la verificación del centrado
     centeringCheckIntervalId = setInterval(window.checkAndRecenterGridSelection, 500);
     window.isCenteringActive = true;
     
-    // La activación del modal (clases, display) también en RAF
-    requestAnimationFrame(() => {
-        modalOverlay.style.display = 'flex';
-        void modalOverlay.offsetWidth; 
-        modalOverlay.classList.add('open');
-        document.body.setAttribute('data-modal-open', 'true');
-
-        setTimeout(() => window.inputLock = false, INPUT_LOCK_DELAY);
-    });
+    // El bloqueo de entrada se levanta después de un breve periodo
+    setTimeout(() => window.inputLock = false, INPUT_LOCK_DELAY);
 };
 
 const cerrarModal = () => {
