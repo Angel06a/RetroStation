@@ -4,8 +4,8 @@
 .game-details-overlay {
     background-color: rgba(0, 0, 0, 0.7); 
     z-index: 2000; 
-    /* ❌ OPTIMIZACIÓN: Se elimina translateZ(0) si no hay animación de transform en sí */
-    will-change: opacity; /* ❌ OPTIMIZACIÓN: Se elimina 'transform' de will-change */
+    /* No se usa transform */
+    will-change: opacity; /* ✅ OPTIMIZACIÓN: Se eliminó 'transform' de will-change */
 }
 
 .game-details-content {
@@ -21,13 +21,13 @@
     padding: 20px;
     position: relative;
     /* ✅ MANTENER: Es el principal animado (escala). */
-    transform: scale(0.95) translateZ(0); /* ❌ OPTIMIZACIÓN: Simplificado translate3d(0, 0, 0) a translateZ(0) */
+    transform: scale(0.95) translateZ(0);
     transition: transform 0.3s ease-in-out; 
     will-change: transform; 
 }
 
 .game-details-overlay.open .game-details-content {
-    transform: scale(1) translateZ(0); /* ❌ OPTIMIZACIÓN: Simplificado translate3d(0, 0, 0) a translateZ(0) */
+    transform: scale(1) translateZ(0);
 }
 
 .game-details-close {
@@ -91,13 +91,13 @@
     will-change: transform;
     width: 100%;
     /* ✅ MANTENER: Se acelera para la animación de hover. */
-    transform: translateZ(0); /* ❌ OPTIMIZACIÓN: Simplificado translate3d(0, 0, 0) a translateZ(0) */
+    transform: translateZ(0);
 }
 
 .download-button:hover {
     background-color: var(--color-accent-hover); 
     color: var(--color-text-light); 
-    transform: scale(1.02) translateZ(0); /* ❌ OPTIMIZACIÓN: Simplificado translate3d(0, 0, 0) a translateZ(0) */
+    transform: scale(1.02) translateZ(0);
 }
 
 /* Estilo para botón deshabilitado */
@@ -105,6 +105,6 @@
     background-color: var(--color-button-gray-light); 
     color: var(--color-text-dark);
     cursor: not-allowed;
-    transform: scale(1) translateZ(0); /* ❌ OPTIMIZACIÓN: Simplificado translate3d(0, 0, 0) a translateZ(0) */
+    transform: scale(1) translateZ(0);
     opacity: 0.6; 
 }
