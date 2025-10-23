@@ -1,27 +1,35 @@
-const STATIC_CACHE_NAME = 'retrostation-static-v5'; // ¡VERSIÓN INCREMENTADA!
-const RUNTIME_CACHE_NAME = 'retrostation-runtime-v4'; // ¡VERSIÓN INCREMENTADA!
+// =========================================================================
+// sw.js: Service Worker para RetroStation (Estrategias avanzadas de caché)
+// =========================================================================
 
-// Lista de sistemas para generar URLs
+// --- NOMBRES DE CACHÉ ---
+// Incrementa la versión para forzar una actualización del Service Worker.
+const CACHE_VERSION = 'v6.1'; 
+const STATIC_CACHE = `retrostation-static-${CACHE_VERSION}`;
+const ASSETS_CACHE = `retrostation-assets-${CACHE_VERSION}`;
+const RUNTIME_CACHE = 'retrostation-runtime'; // No versionamos el caché dinámico para persistencia.
+
+// --- CONFIGURACIÓN DE ARCHIVOS ---
+
+// Lista de sistemas (debe ser el mismo que en data.js, lo mantenemos aquí por si no está disponible)
 const menuItems = [
     "3ds", "bios", "dos", "dreamcast", "gamegear", "gb", "gba", "gbc", "gc", "mame", "megadrive",
     "n64", "naomi2", "nds", "nes", "ps2", "ps3", "psp", "psx", "saturn", "snes", "snes-msu",
     "wii", "wiiu", "xbox"
 ];
 
-// Generación de URLs de iconos (Sistemas/*.svg)
-const systemIcons = menuItems.map(item => `./Sistemas/${item}.svg`);
-// Generación de URLs de fondos (Fondos/*.jpg)
-const systemBackgrounds = menuItems.map(item => `./Fondos/${item}.jpg`);
+// Generación de URLs de Iconos y Fondos
+const SYSTEM_ICONS = menuItems.map(item => `./Sistemas/${item}.svg`);
+const SYSTEM_BACKGROUNDS = menuItems.map(item => `./Fondos/${item}.jpg`);
 
-
-// 1. Archivos Críticos (App Shell) - Cacheo prioritario y obligatorio
-// Incluye el Shell y todos los iconos de sistemas
-const criticalUrlsToCache = [
+// Archivos Críticos (App Shell y Scripts) - Cache First, solo se actualiza con nueva versión SW
+const CRITICAL_SHELL_FILES = [
     './',
     './index.html',
     './main-menu.css',
     './grid-menu.css',
     './game-details.css',
+    './manifest.json', // Añadido el manifest
     './Icons/favicon.png',
     './Icons/back.svg',
     './Icons/loading.svg',
@@ -31,91 +39,115 @@ const criticalUrlsToCache = [
     './Js/utils.js',
     './Js/game-data-loader.js',
     './Js/main-modal-manager.js',
-    './Js/game-grid-nav.js',
+    './Js/game-grid-nav.js', // Asegurado que esté la nueva dependencia game-grid-nav.js
     './Js/mediafire-downloader.js',
     './Js/game-details-logic.js',
     './Js/ui-logic.js',
-    // === ICONOS DE SISTEMAS EN CACHE CRÍTICO ===
-    ...systemIcons
+    ...SYSTEM_ICONS // Iconos críticos para el menú principal
 ];
 
-// 2. Archivos No Críticos (Imágenes Grandes) - Cacheo en segundo plano
-// Ahora solo contiene los fondos generados, eliminando el duplicado de psx.jpg
-const nonCriticalImageCache = [
-    // ELIMINADO: './Fondos/psx.jpg' (Está incluido en ...systemBackgrounds)
-    // === FONDOS DE SISTEMAS EN CACHE NO CRÍTICO ===
-    ...systemBackgrounds
+// Archivos de Assets (Fondos Grandes) - Cache First o Stale-While-Revalidate si la lista fuera enorme
+const ASSET_FILES = [
+    ...SYSTEM_BACKGROUNDS
 ];
 
 
-// Instalación: Divide el cacheo en dos tareas asíncronas.
+// =========================================================================
+// --- ETAPAS DEL SERVICE WORKER ---
+// =========================================================================
+
+// 1. Instalación: Cachea los archivos estáticos y assets.
 self.addEventListener('install', event => {
-    // 1. Tarea Principal (Crítica): Debe completarse para instalar el SW.
-    const criticalCachePromise = caches.open(STATIC_CACHE_NAME)
+    // Tarea Crítica: Cacheo del App Shell
+    const criticalCachePromise = caches.open(STATIC_CACHE)
         .then(cache => {
-            console.log('Service Worker: Cacheando shell estático y crítico');
-            return cache.addAll(criticalUrlsToCache);
-        });
-
-    // 2. Tarea Secundaria (No Crítica): El cacheo de imágenes grandes se hace después.
-    const imageCachePromise = caches.open(RUNTIME_CACHE_NAME)
-        .then(cache => {
-            console.log('Service Worker: Cacheando imágenes grandes en segundo plano');
-            return cache.addAll(nonCriticalImageCache).catch(error => {
-                // Manejar errores para que un fallo en una imagen no detenga el SW
-                console.warn('Error al cachear imágenes no críticas:', error);
+            console.log(`[SW:${CACHE_VERSION}] Cacheando shell estático y crítico...`);
+            return cache.addAll(CRITICAL_SHELL_FILES).catch(error => {
+                console.error('[SW ERROR] Fallo al cachear archivos críticos:', error);
+                throw error; // Falla la instalación si el shell no se puede cachear
             });
         });
 
-    // Esperamos por las promesas críticas.
+    // Tarea Secundaria: Cacheo de assets (fondos)
+    const assetCachePromise = caches.open(ASSETS_CACHE)
+        .then(cache => {
+            console.log(`[SW:${CACHE_VERSION}] Cacheando assets grandes en segundo plano...`);
+            // Permitimos que falle la descarga de un asset sin detener la instalación.
+            return cache.addAll(ASSET_FILES).catch(error => {
+                console.warn('[SW WARN] Error al cachear assets:', error);
+            });
+        });
+
+    // Esperamos que ambas tareas finalicen para completar la instalación (al menos la crítica).
     event.waitUntil(
-        Promise.all([criticalCachePromise, imageCachePromise])
+        Promise.all([criticalCachePromise, assetCachePromise])
     );
 });
 
-// Activación: Elimina cachés antiguas
+// 2. Activación: Elimina cachés antiguas.
 self.addEventListener('activate', event => {
-    const cacheWhitelist = [STATIC_CACHE_NAME, RUNTIME_CACHE_NAME];
+    const cacheWhitelist = [STATIC_CACHE, ASSETS_CACHE, RUNTIME_CACHE];
+    
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
-                    if (cacheWhitelist.indexOf(cacheName) === -1) {
+                    // Eliminamos todos los cachés que no estén en la lista blanca
+                    if (cacheName.includes('retrostation-') && !cacheWhitelist.includes(cacheName)) {
                         console.log('Service Worker: Eliminando caché antigua:', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
             );
+        }).then(() => {
+            // Asegura que el SW toma control de las páginas existentes inmediatamente
+            return self.clients.claim();
         })
     );
 });
 
-// Fetch: Estrategias de cacheo
+
+// 3. Fetch: Estrategias de cacheo en tiempo de ejecución.
 self.addEventListener('fetch', event => {
     const requestUrl = new URL(event.request.url);
+    const requestPath = requestUrl.pathname;
+    const isCritical = CRITICAL_SHELL_FILES.includes(requestPath) || requestPath === '/';
+    const isAsset = ASSET_FILES.includes(requestPath) || event.request.destination === 'image';
+    const isGameData = requestPath.startsWith('./Games/') && requestPath.endsWith('.js');
+    const isMediafire = requestUrl.hostname.includes('mediafire');
 
-    // Estrategia Cache-First para el Shell
-    if (criticalUrlsToCache.includes(requestUrl.pathname) || requestUrl.pathname === '/') {
+    // --- ESTRATEGIA 1: Cache First (Shell estático) ---
+    // Archivos críticos y estáticos. Si están en caché, los devuelve inmediatamente.
+    if (isCritical) {
         event.respondWith(
-            caches.match(event.request)
-                .then(response => {
-                    return response || fetch(event.request);
-                })
+            caches.match(event.request, { cacheName: STATIC_CACHE })
+                .then(response => response || fetch(event.request))
         );
         return;
     }
-
-    // Estrategia Stale-While-Revalidate para imágenes y mediafire (RUNTIME_CACHE)
-    if (event.request.destination === 'image' || requestUrl.hostname.includes('mediafire')) {
+    
+    // --- ESTRATEGIA 2: Stale-While-Revalidate (Imágenes, Assets y Descargas Mediafire) ---
+    // Devuelve el caché inmediatamente y actualiza el caché en segundo plano.
+    if (isAsset || isMediafire) {
         event.respondWith(
-            caches.open(RUNTIME_CACHE_NAME).then(cache => {
+            caches.open(RUNTIME_CACHE).then(cache => {
+                // Devuelve la respuesta del caché si está disponible
                 return cache.match(event.request).then(response => {
+                    // Siempre intenta obtener la versión de red
                     const fetchPromise = fetch(event.request).then(networkResponse => {
+                        // Si la respuesta es válida, la actualiza en el caché
                         if (networkResponse.ok) {
+                            // Clonamos para que el navegador pueda usar una y el caché la otra
                             cache.put(event.request, networkResponse.clone());
                         }
                         return networkResponse;
+                    }).catch(err => {
+                        console.warn(`[SW WARN] Fallo de red para ${requestUrl.pathname}:`, err);
+                        // Si falla la red y no tenemos caché, esto lanzará un error.
+                        throw err; 
                     });
+                    
+                    // Devuelve la caché si existe, sino espera la red.
                     return response || fetchPromise;
                 });
             })
@@ -123,9 +155,25 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Estrategia Network-First para el resto (incluye los archivos de datos de juegos Games/*.js)
+    // --- ESTRATEGIA 3: Network First (Archivos de datos de juegos y otros no cubiertos) ---
+    // Intenta ir a la red primero, si falla, usa el caché.
+    if (isGameData) {
+        event.respondWith(
+            fetch(event.request).catch(() => {
+                // Si la red falla para los datos de juegos, busca en el caché estático o de runtime
+                return caches.match(event.request).then(response => {
+                    if (response) return response;
+                    // Si no está en ningún caché, intenta los otros (por si acaso)
+                    return caches.match(event.request, { cacheName: STATIC_CACHE })
+                           || caches.match(event.request, { cacheName: ASSETS_CACHE });
+                });
+            })
+        );
+        return;
+    }
+    
+    // Fallback por defecto: Network First
     event.respondWith(
         fetch(event.request).catch(() => caches.match(event.request))
     );
 });
-
