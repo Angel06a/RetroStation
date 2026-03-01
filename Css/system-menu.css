@@ -1,0 +1,231 @@
+/* system-menu.css (Restauración de Encabezado y Optimización de Grid) */
+:root{
+    --color-bg-system:#2c2c2c; 
+    --color-text-light:#f0f0f0;
+    --color-accent:#FFA500; 
+    --game-name-height:40px;
+    --grid-gap:20px; /* Base para el espaciado del grid (Original: 20px) */
+}
+body.system-active{
+    background-color:var(--color-bg-system)!important;
+    transition:background-color .3s ease-in-out
+}
+#main-container.system-menu-active{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    box-sizing:border-box;
+    width:100%;
+    height:100vh; 
+    overflow-y:hidden
+}
+#system-header{
+    height:100px; 
+    flex-shrink:0; 
+    width:100%; 
+    display:flex;
+    justify-content:center; 
+    align-items:center;     
+    padding:10px 100px 0;
+    border-bottom:3px solid var(--color-accent);
+    background-size:cover; 
+    background-position:center; 
+    background-repeat:no-repeat; 
+    position:relative; 
+    overflow:hidden;
+    will-change:background-image; 
+    transform:translateZ(0); 
+}
+#system-header::before{
+    content:'';
+    position:absolute;
+    inset:0;
+    background-color:rgba(0,0,0,.4); 
+    z-index:1
+}
+#back-button{
+    position:absolute; 
+    left:20px; 
+    top:50%; 
+    transform:translateY(-50%);
+    background:none;
+    border:none;
+    cursor:pointer;
+    padding:0;
+    z-index:3; 
+    transition:filter .2s ease;
+    will-change:filter; 
+}
+/* ** RESTAURADO: Efecto hover original (aplica el filtro al botón) ** */
+#back-button:hover{
+    filter:drop-shadow(0 0 10px var(--color-accent)) drop-shadow(0 0 5px var(--color-accent))
+}
+/* ** RESTAURADO: back-icon con tamaño fijo original ** */
+#back-icon{
+    width:50px; 
+    height:50px
+}
+/* ** RESTAURADO: system-icon con max-width/height y escalado automático ** */
+#system-icon{
+    max-width:150px; 
+    max-height:80px; 
+    width:auto;  
+    height:auto; 
+    z-index:2
+}
+#game-list-container{
+    flex-grow:1; 
+    overflow-y:auto; 
+    width:100%;
+    color:var(--color-text-light);
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    padding:var(--grid-gap);
+    box-sizing:border-box;
+    transform:translateZ(0); 
+    contain: strict; 
+}
+/* Estilos para el mensaje de "Cargando" o "Error" */
+#game-list-container>p{
+    color:var(--color-text-light);
+    text-align:center;
+    padding-top:20px
+}
+    
+/* ** CONTENEDOR GRID ADAPTABLE ** */
+#game-grid{
+    display:grid;
+    /* Móvil (Default): 2 columnas */
+    grid-template-columns:repeat(2,minmax(120px,1fr)); 
+    gap:var(--grid-gap); 
+    width:100%;
+    list-style:none;
+    padding:0;
+    margin:0;
+    box-sizing:border-box;
+}
+
+/* ** RESPONSIVE DESIGN CON MEDIA QUERIES ** */
+
+/* 720p (768px a 1279px) - 4 columnas */
+@media screen and (min-width: 768px){
+    #game-grid{
+        grid-template-columns:repeat(4,minmax(150px,1fr)); 
+    }
+}
+
+/* 1080p (1280px a 1919px) - 6 columnas */
+@media screen and (min-width: 1280px){
+    #system-header{
+        height:120px;
+        padding:15px 150px 0
+    }
+    /* Escalado de iconos para 1080p */
+    #back-icon{
+        width:60px; 
+        height:60px;
+    }
+    #system-icon{
+        max-width:180px; 
+        max-height:90px;
+    }
+    #game-grid{
+        grid-template-columns:repeat(6,minmax(150px,1fr)); 
+    }
+}
+
+/* 4K y superior (1920px en adelante) - 8 columnas */
+@media screen and (min-width: 1920px){
+    :root{
+        --game-name-height:50px;
+        --grid-gap:30px; 
+    }
+    #system-header{
+        height:150px;
+        padding:20px 200px 0
+    }
+    /* Escalado de iconos para 4K */
+    #back-icon{
+        width:70px; 
+        height:70px;
+    }
+    #system-icon{
+        max-width:220px; 
+        max-height:110px;
+    }
+    #game-grid{
+        grid-template-columns:repeat(8,minmax(180px,1fr)); 
+    }
+}
+
+/* ** ESTILOS DE ÍTEMS INDIVIDUALES ** */
+.game-item{
+    background-color:#1a1a1a;
+    border-radius:8px;
+    overflow:hidden;
+    text-decoration:none;
+    color:var(--color-text-light);
+    display:flex;
+    flex-direction:column;
+    cursor:pointer;
+    position:relative;
+    text-align:center;
+    height:fit-content;
+    will-change:transform,box-shadow; 
+    transition:transform .2s ease,box-shadow .2s ease; 
+    contain: layout paint;
+}
+.game-item:hover{
+    transform:translateY(-5px) scale(1.03) translateZ(1px); 
+    box-shadow:0 5px 15px rgba(0,0,0,.5)
+}
+.game-item-img-wrapper{
+    width:100%;
+    height:auto; 
+    max-height:0; 
+    overflow:hidden;
+    transition:max-height .5s ease-out; 
+    border-radius:8px 8px 0 0;
+    will-change:max-height; 
+}
+.game-item-img{
+    width:100%;
+    height:auto; 
+    object-fit:contain; 
+    background-color:transparent; 
+    opacity:1; 
+    transition:none;
+    will-change:opacity; 
+    transform:translateZ(0); 
+}
+.game-item-name-container{
+    height:var(--game-name-height); 
+    flex-shrink:0; 
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 5px; 
+    border-radius:0 0 8px 8px 
+}
+.game-item-name{
+    font-size:.85em; 
+    margin:0;
+    line-height:1.2;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    display:-webkit-box;
+    -webkit-line-clamp:2; 
+    -webkit-box-orient:vertical;
+    word-break:break-word
+}
+.game-item-empty{
+    color:#f55;
+    font-size:1.2em;
+    margin-top:30px
+}
+
+@media (max-width:767px){
+    :root{--game-name-height:35px}
+    .game-item-name{font-size:.75em}
+}

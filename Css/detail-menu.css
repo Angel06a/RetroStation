@@ -1,0 +1,135 @@
+/* detail-menu.css (Estilos para el Menú Modal de Detalle) */
+
+:root{
+    --color-bg-modal:rgba(0,0,0,.9); /* Fondo oscuro semitransparente */
+    --color-bg-content:#333; /* Fondo del contenido del modal */
+    --color-text-light:#f0f0f0;
+    --color-accent:#FFA500; 
+    --detail-button-size: 50px; /* Tamaño del botón de volver/cerrar */
+}
+
+#detail-container{
+    /* La clase 'active' controla display: block; y pointer-events: auto; */
+    /* La opacidad y display las controla ahora index.html */
+}
+
+#detail-overlay{
+    position:fixed;
+    inset:0;
+    background-color:var(--color-bg-modal);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    /* CAMBIO: Opacidad eliminada, ya que la opacidad la gestiona #detail-container */
+    opacity:1; 
+    /* TRANSICIÓN ELIMINADA: antes era transition:opacity .2s ease-in-out; */
+}
+
+/* REMOVIDO: El selector #detail-container.active #detail-overlay ya no es necesario */
+
+#detail-content{
+    background-color:var(--color-bg-content);
+    color:var(--color-text-light);
+    border-radius:10px;
+    padding:30px;
+    width:90%;
+    max-width:500px; /* Tamaño máximo para el modal */
+    box-shadow:0 0 50px rgba(0,0,0,.9);
+    position:relative;
+    transform:scale(1); /* MODIFICADO: Escala 1 por defecto para aparición instantánea */
+    /* TRANSICIÓN ELIMINADA: antes era transition:transform .2s ease-out; */
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+}
+
+/* REMOVIDO: El selector #detail-container.active #detail-content ya no es necesario */
+
+/* ** ESTILOS ADAPTADOS DEL BOTÓN BACK DE SYSTEM-MENU (CORREGIDOS) ** */
+#detail-close-button{
+    position:absolute;
+    top:10px;
+    /* POSICIONAMIENTO A LA IZQUIERDA */
+    left:10px; 
+    right:auto;
+    
+    width:var(--detail-button-size);
+    height:var(--detail-button-size);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background:none;
+    border:none;
+    cursor:pointer;
+    padding:0;
+    
+    /* CORRECCIÓN CRÍTICA: La transición se aplica al botón contenedor, no al icono */
+    transition: filter .2s ease; /* Se mantiene la transición de hover */
+    will-change: filter;
+}
+
+#detail-close-button:hover{
+    /* Aplicar el filtro de sombra de gota naranja puro (igual que en system-menu) */
+    filter: drop-shadow(0 0 10px var(--color-accent)) drop-shadow(0 0 5px var(--color-accent)); 
+}
+
+#detail-back-icon{
+    width:35px;
+    height:35px;
+    /* Aplicar filtro de color blanco al SVG por defecto (no tiene transición) */
+    filter:grayscale(1) brightness(2) contrast(1.5); 
+    
+    /* Eliminada la propiedad transition y will-change de aquí */
+}
+/* ** FIN ESTILOS ADAPTADOS ** */
+
+
+#detail-title{
+    margin-top:10px; 
+    margin-bottom:20px;
+    font-size:1.5em;
+    word-break:break-word;
+}
+
+#detail-img-wrapper{
+    max-width:200px; 
+    max-height:250px;
+    margin-bottom:10px; /* Reducido para acercar el nombre */
+    overflow:hidden;
+    border-radius:5px;
+    box-shadow:0 0 10px rgba(0,0,0,.5);
+}
+
+#detail-img{
+    width:100%;
+    height:auto;
+    display:block;
+    object-fit:contain;
+}
+
+#detail-download-button{
+    background-color:var(--color-accent);
+    color:#222;
+    padding:10px 20px;
+    border-radius:5px;
+    text-decoration:none;
+    font-weight:bold;
+    font-size:1.1em;
+    transition:background-color .2s ease,transform .1s ease; /* Se mantiene la transición de hover */
+}
+
+#detail-download-button:hover{
+    background-color:orange;
+    transform:scale(1.05);
+}
+
+@media (max-width:550px){
+    #detail-content{
+        padding:20px;
+        margin:0 10px;
+    }
+    #detail-img-wrapper{
+        max-width:150px;
+    }
+}
