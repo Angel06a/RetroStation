@@ -20,7 +20,6 @@
             background-color:var(--color-bg-base);
             font-family:Arial,sans-serif;
             overflow:hidden;
-            /* Transición del body solo para el color de fondo */
             transition:background-color .3s ease-out; 
             opacity:1;
         }
@@ -31,38 +30,28 @@
             width:100%;
             height:100%;
             opacity:0; 
-            /* DURACIÓN REDUCIDA: de 0.5s a 0.3s */
             transition:opacity .3s ease-in-out; 
             z-index:10;
             pointer-events:none;
             transform:scale(1); 
-            /* Agregar will-change para la transición de opacidad */
             will-change: opacity; 
         }
         #main-container.active{
-            /* Esta clase solo se usa para habilitar la interacción (pointer-events) */
             pointer-events:auto;
         }
-        /* ** NUEVO: Contenedor para el menú modal (detail-menu) ** */
         #detail-container{
             position:absolute;
             inset:0;
-            z-index:20; /* Mayor que main-container (z-index: 10) */
-            pointer-events:none; /* Inicia inactivo */
-            /* INICIO DE CAMBIO */
-            opacity:0; /* Controlaremos la opacidad con JS */
-            display:none; /* Inicia oculto */
-            /* Agregamos la transición de opacidad */
+            z-index:20;
+            pointer-events:none;
+            opacity:0;
+            display:none;
             transition: opacity .3s ease-in-out;
             will-change: opacity;
-            /* FIN DE CAMBIO */
         }
         #detail-container.active{
-            /* Se mantiene para que JS pueda cambiar el estado visual */
             pointer-events:auto;
-            /* El display: block; lo controlará JS */
         }
-        /* ** FIN NUEVO ** */
         #loader-spinner{
             border:4px solid rgba(255,255,255,.3);
             border-top:4px solid var(--color-accent);
@@ -82,10 +71,6 @@
     <link rel="stylesheet" href="Css/system-menu.css" media="print" onload="this.media='all'">
     <link rel="preload" href="Css/detail-menu.css" as="style">
     <link rel="stylesheet" href="Css/detail-menu.css" media="print" onload="this.media='all'">
-    <link rel="preload" href="Js/main-menu.js" as="script">
-    <link rel="preload" href="Js/data.js" as="script">
-    <link rel="preload" href="Js/system-menu.js" as="script">
-    <link rel="preload" href="Js/detail-menu.js" as="script">
     </head>
 <body>
     <div id="loader-spinner"></div>
@@ -95,7 +80,6 @@
         window.decodeImage=function(img){
             return new Promise(resolve=>{
                 if('decode'in img){
-                    // Uso de img.decode() para la decodificación asíncrona del SVG/imagen
                     img.decode().then(resolve).catch(resolve);
                 }else{
                     setTimeout(resolve,0); 
@@ -104,155 +88,83 @@
         };
 
         const mainContainer = document.getElementById('main-container');
-        // DURACIÓN REDUCIDA: de 550ms a 300ms
+        const detailContainer = document.getElementById('detail-container');
         const TRANSITION_DURATION = 300; 
-        const detailContainer = document.getElementById('detail-container'); // NUEVO: Referencia a detail-container
 
-        /**
-         * Función central para gestionar el fade-out, el cambio de contenido y el fade-in.
-         * @param {function} contentChangeCallback Función a ejecutar durante el fade-out (cambio de menú).
-         * @param {string} newBodyClass Clase CSS a aplicar al body para el nuevo menú (ej: 'system-active' o '').
-         */
         window.transitionScreen = function(contentChangeCallback, newBodyClass = '') {
             mainContainer.style.opacity = '0';
-            mainContainer.classList.remove('active'); // Deshabilita pointer-events
-            
-            // Revertir o aplicar el estado de la clase del body para la transición de color
+            mainContainer.classList.remove('active');
             document.body.className = newBodyClass;
 
             setTimeout(() => {
-                // 1. Ejecutar el cambio de contenido (e.g., renderizar el nuevo menú)
                 contentChangeCallback();
-                
-                // 2. Fade-in
                 requestAnimationFrame(() => {
                     mainContainer.style.opacity = '1';
-                    mainContainer.classList.add('active'); // Habilita pointer-events
+                    mainContainer.classList.add('active');
                 });
             }, TRANSITION_DURATION);
         };
 
-        // INICIO DE CAMBIOS PARA DETAIL-MENU
-        // Sobrescribimos la función showDetailMenu temporalmente para controlar la transición desde aquí.
-        const originalShowDetailMenu = window.showDetailMenu;
-        window.showDetailMenu = function(game) {
-            // 1. Ejecutar la lógica de contenido de detail-menu.js
-            originalShowDetailMenu(game);
-
-            // 2. Aplicar transición de Fade-In
-            // Primero aseguramos que esté visible (display: block) para que la transición funcione.
-            detailContainer.style.display = 'block'; 
+        // Orquestador de transiciones para el detalle
+        window.openDetailTransition = function(game) {
+            if (typeof window.renderDetailContent !== 'function') return;
             
-            // Forzar reflow (para asegurar que 'display' se aplique antes de cambiar la opacidad)
+            window.renderDetailContent(game);
+            detailContainer.style.display = 'block'; 
             detailContainer.offsetHeight; 
 
-            // Aplicar la opacidad en el siguiente frame
             requestAnimationFrame(() => {
                 detailContainer.style.opacity = '1';
-                detailContainer.classList.add('active'); // Mantenemos .active para pointer-events
+                detailContainer.classList.add('active');
             });
         };
 
-        // Sobrescribimos la función hideDetailMenu temporalmente para controlar la transición desde aquí.
-        const originalHideDetailMenu = window.hideDetailMenu;
-        window.hideDetailMenu = function() {
+        window.closeDetailTransition = function() {
             if (!window.isDetailMenuOpen) return;
 
-            // 1. Aplicar transición de Fade-Out
             detailContainer.style.opacity = '0';
-            detailContainer.classList.remove('active'); // Deshabilita pointer-events
+            detailContainer.classList.remove('active');
             
-            // 2. Ejecutar la lógica de limpieza de detail-menu.js después de la transición
             setTimeout(() => {
-                originalHideDetailMenu(); // Ejecuta la limpieza de contenido y remueve listeners
-                detailContainer.style.display = 'none'; // Oculta el contenedor al finalizar la transición
-            }, TRANSITION_DURATION); // Usamos la misma duración de transición
+                if (typeof window.clearDetailContent === 'function') {
+                    window.clearDetailContent();
+                }
+                detailContainer.style.display = 'none';
+            }, TRANSITION_DURATION);
         };
-        // FIN DE CAMBIOS PARA DETAIL-MENU
         
         function loadMainMenu(){
-            Promise.all([
-                new Promise(resolve=>{
-                    const scriptData=document.createElement('script');
-                    scriptData.src='Js/data.js';
-                    scriptData.async=true;
-                    scriptData.onload=resolve;
-                    document.body.appendChild(scriptData);
-                }),
-                new Promise(resolve=>{
-                    const scriptMenu=document.createElement('script');
-                    scriptMenu.src='Js/main-menu.js';
-                    scriptMenu.async=true;
-                    scriptMenu.onload=resolve;
-                    document.body.appendChild(scriptMenu);
-                }),
-                // NUEVA CARGA: Carga asíncrona de system-menu.js
-                new Promise(resolve=>{
-                    const scriptSystemMenu=document.createElement('script');
-                    scriptSystemMenu.src='Js/system-menu.js';
-                    scriptSystemMenu.async=true;
-                    scriptSystemMenu.onload=resolve;
-                    document.body.appendChild(scriptSystemMenu);
-                }),
-                // ** NUEVA CARGA: Carga asíncrona de detail-menu.js **
-                new Promise(resolve=>{
-                    const scriptDetailMenu=document.createElement('script');
-                    scriptDetailMenu.src='Js/detail-menu.js';
-                    scriptDetailMenu.async=true;
-                    scriptDetailMenu.onload=resolve;
-                    document.body.appendChild(scriptDetailMenu);
-                })
-                // ** FIN NUEVA CARGA **
-            ]).then(()=>{
-                // ** CAMBIO CRÍTICO **
-                // Al cargar detail-menu.js, se definen las funciones originales.
-                // Es necesario re-aplicar las funciones sobrescritas con la lógica de fade
-                // después de que `detail-menu.js` se haya cargado.
-                const originalShowDetailMenuLoaded = window.showDetailMenu;
-                const originalHideDetailMenuLoaded = window.hideDetailMenu;
-                
-                window.showDetailMenu = function(game) {
-                    originalShowDetailMenuLoaded(game);
-                    detailContainer.style.display = 'block';
-                    detailContainer.offsetHeight; 
-                    requestAnimationFrame(() => {
-                        detailContainer.style.opacity = '1';
-                        detailContainer.classList.add('active');
-                    });
-                };
-                
-                window.hideDetailMenu = function() {
-                    if (!window.isDetailMenuOpen) return;
-                    detailContainer.style.opacity = '0';
-                    detailContainer.classList.remove('active');
-                    setTimeout(() => {
-                        originalHideDetailMenuLoaded();
-                        detailContainer.style.display = 'none';
-                    }, TRANSITION_DURATION);
-                };
-                // ** FIN DE CAMBIO CRÍTICO **
+            const scripts = ['Js/data.js', 'Js/main-menu.js', 'Js/system-menu.js', 'Js/detail-menu.js'];
+            
+            Promise.all(scripts.map(src => {
+                return new Promise(resolve => {
+                    const s = document.createElement('script');
+                    s.src = src;
+                    s.async = true;
+                    s.onload = resolve;
+                    document.body.appendChild(s);
+                });
+            })).then(()=>{
+                // Vinculamos las funciones globales a las de transición
+                window.showDetailMenu = window.openDetailTransition;
+                window.hideDetailMenu = window.closeDetailTransition;
 
                 if(window.initMainMenu){
-                    // Usar transitionScreen para el inicio
                     window.transitionScreen(() => {
                         window.initMainMenu();
                     }, ''); 
                 }
                 requestAnimationFrame(()=>{
                     const loaderSpinner=document.getElementById('loader-spinner');
-                    loaderSpinner.style.opacity='0';
-                    setTimeout(()=>{
-                        loaderSpinner.remove();
-                    },1000); 
+                    if(loaderSpinner) {
+                        loaderSpinner.style.opacity='0';
+                        setTimeout(()=> loaderSpinner.remove(), 1000);
+                    }
                 });
-            }).catch(error=>{
-                console.error("Error al cargar los recursos del menú principal:",error);
-            });
+            }).catch(err => console.error("Error cargando scripts:", err));
         }
-        document.addEventListener('DOMContentLoaded', ()=>{
-            setTimeout(loadMainMenu,500);
-        });
+
+        document.addEventListener('DOMContentLoaded', () => setTimeout(loadMainMenu, 500));
     </script>
 </body>
-
 </html>
