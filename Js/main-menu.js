@@ -1,4 +1,4 @@
-// main-menu.js (Optimización Avanzada - Mini y Compacto)
+// main-menu.js - VERSIÓN FINAL "ULTRA-PERFORMANCE" (PERSISTENCIA Y CICLO DE VIDA CORREGIDO)
 const menuHTML = `
     <div id="background-container" aria-hidden="true">
         <div id="bg-layer-1" class="background-layer"></div>
@@ -7,19 +7,32 @@ const menuHTML = `
     <main id="rueda" class="rueda" role="navigation" aria-label="Menú principal de sistemas de juegos" tabindex="0"></main>
 `;
 
+// Inyección de optimización de renderizado CSS
+(function injectPerformanceCSS() {
+    const style = document.createElement('style');
+    style.innerHTML = `
+        #rueda { contain: layout style; }
+        .opcion img { pointer-events: none; user-select: none; }
+        .background-layer { will-change: opacity; }
+    `;
+    document.head.appendChild(style);
+})();
+
 const D2R = Math.PI / 180;
-const WC = { IVF: .09 * 1.6, IWF: 2.6, TGR: 1.7, MRR: 300 / 1080, EMR: .8 };
+const WC = { IVF: 0.144, IWF: 2.6, TGR: 1.7, MRR: 0.277, EMR: 0.8 };
 const BREAKPOINT = 768;
 const ANIM_DUR_BG = 500;
 const LOCK_DUR_CLICK = 50;
 const DEBOUNCE_BG_MS = 50;
+const MAX_BG_CACHE = 12; 
 
 let vH = 0, vW = 0;
-
-const _uV = () => { vH = window.innerHeight; vW = window.innerWidth };
+const _uV = () => { vH = window.innerHeight; vW = window.innerWidth; };
 _uV();
 
-const _cM = (aPO, tO) => {
+const _round = (n) => Math.round(n * 100) / 100;
+
+const _calculateDimensions = (aPO, tO) => {
     const { IVF, IWF, TGR, MRR, EMR } = WC;
     const h = vH || window.innerHeight;
     const iH = h * IVF, iW = iH * IWF, tCC = iH * (1 + TGR);
@@ -29,332 +42,285 @@ const _cM = (aPO, tO) => {
         rR = sA > 1e-6 ? tCC / sA : Infinity;
     }
     const cR = Math.max(h * MRR, rR);
-    const rT = cR * 2, pL = -(cR * (1 + EMR));
-    const r = (n) => Math.round(n * 100) / 100; // Función de redondeo inlined
-    return {
-        iH: r(iH), iW: r(iW),
-        cR: r(cR), rT: r(rT), pL: r(pL)
-    }
-}
-
-const _cA = (r, o, iA, aPO, tO, iM) => {
-    const { iH, iW, cR: R, rT, pL } = _cM(aPO, tO);
-
-    r.style.setProperty('--rueda-tamano', `${rT}px`);
-    r.style.setProperty('--posicion-left', `${pL}px`);
-    
-    if (!iM) {
-        for (let i = 0; i < o.length; i++) {
-            const op = o[i];
-            const aPR = iA[i] * D2R;
-            const xO = Math.cos(aPR) * R, yO = Math.sin(aPR) * R;
-            const r = (n) => Math.round(n * 100) / 100; 
-
-            op.style.height = `${iH}px`;
-            op.style.width = `${iW}px`;
-            op.style.setProperty('--x-offset', `${r(xO)}px`);
-            op.style.setProperty('--y-offset', `${r(yO)}px`);
-        }
-    }
-    return { currentRadius: R }
-}
+    return { iH: _round(iH), iW: _round(iW), cR: _round(cR), rT: _round(cR * 2), pL: _round(-(cR * (1 + EMR))) };
+};
 
 const deferredTask = (t) => ('requestIdleCallback' in window) ? requestIdleCallback(t) : setTimeout(t, 0);
 
-window.calculateAndApplyDimensions = _cA;
-window.updateViewportCache = _uV;
-window.lastSelectedIndex = 0;
-
 class RD {
-    constructor(mI, cbs, initialIndex = 0) {
-        this.cbs = cbs;
+    constructor(mI, initialIndex = 0) {
         this.rEl = document.getElementById('rueda');
         if (!this.rEl) return;
-        this.bg1 = document.getElementById('bg-layer-1'), this.bg2 = document.getElementById('bg-layer-2');
-        this.cBgL = this.bg1;
-        
-        Object.assign(this, { ...window }); 
 
-        this.mI = mI, this.opc = [];
-        this.tO = mI.length, this.aPO = 360 / this.tO, this.hO = this.tO / 2;
-        this.iA = null, this.cR = 0, this.iX = initialIndex, this.rO = 0, this.isM = false;
-        this.isRAFThrottled = false, this.isRC = false, this.oA = null, this.rRI = null;
-        this.bgCache = new Map(), this.cBGU = null, this.rVar = '--rueda-rotacion-actual';
-        this.lazyObserver = null, this.bRTID = null, this.bgDebounceID = null;
+        this.bg1 = document.getElementById('bg-layer-1');
+        this.bg2 = document.getElementById('bg-layer-2');
+        this.mI = mI;
+        this.opc = [];
+        this.tO = mI.length;
+        this.aPO = 360 / this.tO;
+        this.hO = this.tO / 2;
         
-        this.bg1.style.willChange = this.bg2.style.willChange = 'opacity';
-        
-        ['hKD', 'hW', 'hC', 'hR'].forEach(m => this[m] = this[m].bind(this));
-        
-        this.isRC = true; 
-        
+        this.uV = mI.map((_, i) => ({
+            x: Math.cos((i * this.aPO) * D2R),
+            y: Math.sin((i * this.aPO) * D2R)
+        }));
+
+        this.state = new Proxy({ index: initialIndex }, {
+            set: (target, prop, value) => {
+                if (prop === 'index') {
+                    const idx = (value + this.tO) % this.tO;
+                    target[prop] = idx;
+                    // Persistencia inmediata cada vez que cambia el índice
+                    window.lastSelectedIndex = idx;
+                    this._onIndexChange(idx);
+                }
+                return true;
+            }
+        });
+
+        Object.assign(this, {
+            iA: this.uV.map((_, i) => i * this.aPO),
+            cR: 0, rO: 0, isM: false, isRC: true,
+            bgCache: new Map(), cBGU: null, rVar: '--rueda-rotacion-actual',
+            lazyObserver: null, cBgL: this.bg1,
+            IMG_DIR: window.IMG_DIR || '', IMG_EXT: window.IMG_EXT || '.png',
+            BG_DIR: window.BG_DIR || '', BG_EXT: window.BG_EXT || '.jpg'
+        });
+
+        ['_hKD', '_hW', '_hC', '_hR'].forEach(m => this[m] = this[m].bind(this));
+        this._init();
+    }
+
+    _init() {
         this._gO(() => {
-            this.iA = Array.from(this.opc, (_, i) => i * this.aPO);
-            this.rO = +((this.iA[this.iX] * -1).toFixed(2));
-            this._iAR(this.rO), this._aEL(), this._iV(true), this._pABG()
+            this.rO = _round(this.iA[this.state.index] * -1);
+            this._iAR(this.rO);
+            this._aEL();
+            this._rS(true);
             setTimeout(() => this.isRC = false, LOCK_DUR_CLICK);
-        })
+        });
     }
+
+    _onIndexChange(idx) {
+        this._aS(true);
+        this._aBG();
+        this._pABG();
+    }
+
+    _pDIB(u) {
+        if (this.bgCache.has(u)) {
+            const p = this.bgCache.get(u);
+            this.bgCache.delete(u);
+            this.bgCache.set(u, p);
+            return p;
+        }
+        if (this.bgCache.size >= MAX_BG_CACHE) this.bgCache.delete(this.bgCache.keys().next().value);
+        const p = new Promise(r => {
+            const img = new Image();
+            img.onload = async () => { await window.decodeImage?.(img); r(u); };
+            img.onerror = () => r(u);
+            img.src = u;
+        });
+        this.bgCache.set(u, p);
+        return p;
+    }
+
+    _applyDimensions(isM) {
+        const dims = _calculateDimensions(this.aPO, this.tO);
+        this.cR = dims.cR;
+        this.rEl.style.setProperty('--rueda-tamano', `${dims.rT}px`);
+        this.rEl.style.setProperty('--posicion-left', `${dims.pL}px`);
+        
+        if (!isM) {
+            this.opc.forEach((op, i) => {
+                op.style.height = `${dims.iH}px`;
+                op.style.width = `${dims.iW}px`;
+                op.style.setProperty('--x-offset', `${_round(this.uV[i].x * dims.cR)}px`);
+                op.style.setProperty('--y-offset', `${_round(this.uV[i].y * dims.cR)}px`);
+            });
+        }
+    }
+
     destroy() {
-        ['keydown', 'wheel'].forEach(e => document.removeEventListener(e, this[e === 'wheel' ? 'hW' : 'hKD'], { passive: e === 'wheel' })); 
-        this.rEl?.removeEventListener('click', this.hC),
-        window.removeEventListener('resize', this.hR),
-        this.lazyObserver?.disconnect(),
-        this.rRI && cancelAnimationFrame(this.rRI),
-        [this.bRTID, this.bgDebounceID].forEach(id => id && clearTimeout(id)),
-        this._sWCS(false); 
-        this.bg1.style.willChange = this.bg2.style.willChange = 'auto';
+        document.removeEventListener('keydown', this._hKD);
+        document.removeEventListener('wheel', this._hW);
+        this.rEl?.removeEventListener('click', this._hC);
+        window.removeEventListener('resize', this._hR);
+        this.lazyObserver?.disconnect();
+        this.bgCache.clear();
+
+        setTimeout(() => {
+            if (this.rEl) {
+                this.rEl.innerHTML = '';
+                this.opc = [];
+            }
+        }, 500); 
     }
+
     _gO(oC) {
         const frag = document.createDocumentFragment();
         this.mI.forEach((n, i) => {
             const op = document.createElement('div');
-            op.className = 'opcion', op.dataset.index = i;
-            op.style.willChange = 'transform'; 
-            const img = document.createElement('img');
-            img.setAttribute('data-src', this.IMG_DIR + n + this.IMG_EXT);
-            img.setAttribute('loading', 'lazy'), img.alt = n;
-            op.appendChild(img), this.opc.push(op), frag.appendChild(op);
+            op.className = 'opcion';
+            op.dataset.index = i;
+            op.innerHTML = `<img data-src="${this.IMG_DIR}${n}${this.IMG_EXT}" loading="lazy" alt="${n}">`;
+            this.opc.push(op);
+            frag.appendChild(op);
         });
-        requestAnimationFrame(() => (this.rEl.appendChild(frag), this._iLIO(), oC?.()));
+        requestAnimationFrame(() => { this.rEl.appendChild(frag); this._iLIO(); oC?.(); });
     }
+
     _iAR(r) {
-        this.rEl.style.transition = 'none'; 
+        this.rEl.style.transition = 'none';
         this.rEl.style.setProperty(this.rVar, `${r.toFixed(2)}deg`);
         requestAnimationFrame(() => this.rEl.style.transition = '');
     }
-    _pD(img) { 
-        return new Promise(r => {
-            const dS = img.getAttribute('data-src');
-            if (!dS) return r(img);
-            
-            if (this.IMG_EXT === '.svg') {
-                deferredTask(() => { img.src = dS; r(img); });
-            } else {
-                const iL = new Image();
-                iL.onload = async () => (await window.decodeImage(iL), deferredTask(() => { img.src = dS; r(img); }));
-                iL.onerror = () => r(img);
-                iL.src = dS;
-            }
-        })
-    }
-    _fD(img) { 
-        deferredTask(() => {
-            img.removeAttribute('data-src');
-            img.removeAttribute('loading');
-        });
-    }
+
     _iLIO() {
         this.lazyObserver?.disconnect();
-        this.lazyObserver = new IntersectionObserver((e, o) => e.forEach(entry => {
-            if (entry.isIntersecting) {
-                const img = entry.target.querySelector('img');
-                img.hasAttribute('data-src') && this._pD(img).then(this._fD); 
-                o.unobserve(entry.target)
-            }
-        }), { root: this.rEl, rootMargin: '100px 100px', threshold: 0 });
-        this.opc.forEach(op => op.querySelector('img').hasAttribute('data-src') && this.lazyObserver.observe(op));
+        this.lazyObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target.querySelector('img');
+                    if (img?.hasAttribute('data-src')) {
+                        const src = img.getAttribute('data-src');
+                        const iL = new Image();
+                        iL.onload = () => { img.src = src; img.removeAttribute('data-src'); };
+                        iL.src = src;
+                    }
+                    this.lazyObserver.unobserve(entry.target);
+                }
+            });
+        }, { root: this.rEl, rootMargin: '200px' });
+        this.opc.forEach(op => this.lazyObserver.observe(op));
     }
-    _sWCS(a) { 
-        const s = a ? 'transform' : 'auto';
-        if (this.rEl.style.willChange !== s) {
-            this.rEl.style.willChange = s;
-            this.opc.forEach(o => o.style.willChange = s);
-        }
+
+    _aS(scroll = false, instant = false) {
+        if (this.oA) this.oA.classList.remove('seleccionada');
+        this.oA = this.opc[this.state.index];
+        if (this.oA) this.oA.classList.add('seleccionada');
+        if (scroll) this._sTS(this.state.index, instant);
     }
-    _aR() { 
-        if (this.isM) return;
-        requestAnimationFrame(() => this.rEl.style.setProperty(this.rVar, `${this.rO.toFixed(2)}deg`)); 
-        setTimeout(() => this.isRC = false, LOCK_DUR_CLICK) 
-    }
-    _cMV() { 
-        const nIM = window.innerWidth <= BREAKPOINT;
-        if (nIM === this.isM) return false;
-        this.isM = nIM;
-        this._sWCS(!nIM); 
-        return true; 
-    }
-    _sTS(i, instant = false) { 
+
+    _sTS(i, instant = false) {
         if (!this.isM || !this.opc[i]) return;
-        const sel = this.opc[i], cont = this.rEl;
-        const behavior = instant ? 'auto' : 'smooth';
-        
         requestAnimationFrame(() => {
-            const iRect = sel.getBoundingClientRect(), cRect = cont.getBoundingClientRect(); 
-            const tS = cont.scrollTop + iRect.top - cRect.top + iRect.height/2 - cRect.height/2;
-            Math.abs(cont.scrollTop - tS) > 1 && cont.scrollTo({ top: tS, behavior });
-        })
-    }
-    _uV() { 
-        !this.isM 
-            ? (this.rEl.style.transform = '', this._aR()) 
-            : (this.rEl.style.transform = 'none', this.rEl.style.setProperty(this.rVar, `0deg`));
-        this._iLIO(), this._sTS(this.iX, false);
-    }
-    _pDIB(u) { 
-        if (this.bgCache.has(u)) return this.bgCache.get(u);
-        const p = new Promise(r => {
-            const img = new Image();
-            img.onload = async () => (await window.decodeImage(img), r(u));
-            img.onerror = () => r(u);
-            img.src = u; 
-        });
-        return this.bgCache.set(u, p).get(u);
-    }
-    _pABG(i = this.iX) { 
-        [i, i - 1, i + 1].forEach(idx => {
-            this._pDIB(this.BG_DIR + this.mI[(idx % this.tO + this.tO) % this.tO] + this.BG_EXT);
+            const iRect = this.opc[i].getBoundingClientRect(), cRect = this.rEl.getBoundingClientRect();
+            const tS = this.rEl.scrollTop + iRect.top - cRect.top + iRect.height / 2 - cRect.height / 2;
+            this.rEl.scrollTo({ top: tS, behavior: instant ? 'auto' : 'smooth' });
         });
     }
-    _aBG() { 
-        const bgUrl = this.BG_DIR + this.mI[this.iX] + this.BG_EXT;
+
+    _aBG() {
+        const bgUrl = `${this.BG_DIR}${this.mI[this.state.index]}${this.BG_EXT}`;
         const fBU = `url('${bgUrl}')`;
         if (this.cBGU === fBU) return;
-        
-        this.bgDebounceID && clearTimeout(this.bgDebounceID);
-        const iX_cache = this.iX;
-        
-        this.bgDebounceID = setTimeout(() => {
-            requestAnimationFrame(() => {
-                if (iX_cache !== this.iX) return; 
 
+        clearTimeout(this.bgDebounceID);
+        this.bgDebounceID = setTimeout(() => {
+            this._pDIB(bgUrl).then(() => {
                 const tL = this.cBgL === this.bg1 ? this.bg2 : this.bg1;
                 const cL = this.cBgL;
-                
-                this._pDIB(bgUrl).then(rU => {
-                    if (iX_cache !== this.iX) return; 
-                    this.cBGU = fBU;
+                this.cBGU = fBU;
+                if (tL) {
                     tL.style.backgroundImage = fBU;
-                    tL.style.zIndex = '2', cL.style.zIndex = '1';
-                    cL.style.opacity = '0', tL.style.opacity = '1';
-                    
-                    this.bRTID && clearTimeout(this.bRTID);
-                    this.bRTID = setTimeout(() => (cL.style.zIndex = '1', this.bRTID = null), ANIM_DUR_BG + 50);
+                    tL.style.opacity = '1';
+                }
+                if (cL) cL.style.opacity = '0';
+                this.cBgL = tL;
+            });
+        }, DEBOUNCE_BG_MS);
+    }
 
-                    this.cBgL = tL
-                })
-                this.bgDebounceID = null
-            })
-        }, DEBOUNCE_BG_MS)
+    _pABG(i = this.state.index) {
+        [-1, 1].forEach(offset => {
+            const idx = (i + offset + this.tO) % this.tO;
+            this._pDIB(`${this.BG_DIR}${this.mI[idx]}${this.BG_EXT}`);
+        });
     }
-    _aS(s = false, instant = false) { 
-        this.oA?.classList.remove('seleccionada');
-        const nS = this.opc[this.iX];
-        (this.oA = nS).classList.add('seleccionada');
-        
-        const img = nS.querySelector('img');
-        img.style.willChange = 'transform, filter'; 
-        if (this.oA !== nS && this.oA) {
-            this.oA.querySelector('img').style.willChange = 'auto';
-        }
 
-        img.hasAttribute('data-src') && this._pD(img).then(this._fD);
-
-        this._aBG(), this._pABG(); 
-        s && this._sTS(this.iX, instant)
-    }
-    _uIAR(p) { 
-        this.iX = (this.iX + p + this.tO) % this.tO;
-        !this.isM && (this.rO = +((this.rO - (p * this.aPO)).toFixed(2)), this._aR());
-    }
-    _hSS() { 
-        window.lastSelectedIndex = this.iX; 
-        window.onSystemSelect?.(this.mI[this.iX]);
-    }
-    rR(dir) { this._uIAR(dir), this._aS(true) }
-    hKD(e) {
+    _hKD(e) {
         const k = e.key.toLowerCase();
-        if (k === 'enter') return this._hSS(), e.preventDefault();
-        
-        const isV = ['arrowup', 'arrowdown', 'w', 's'].includes(k);
-        const isH = ['arrowleft', 'arrowright', 'a', 'd'].includes(k);
-        let dir = 0;
-
-        if (this.isM) {
-            dir = isV ? ((k === 'arrowdown' || k === 's') ? 1 : -1) : 0;
-        } else if (isV || isH) {
-             dir = (k === 'arrowright' || k === 'arrowdown' || k === 'd' || k === 's') ? 1 : -1;
+        if (k === 'enter') { 
+            e.preventDefault(); 
+            window.lastSelectedIndex = this.state.index; 
+            return window.onSystemSelect?.(this.mI[this.state.index]); 
         }
+        let dir = 0;
+        if (['arrowup', 'w', 'arrowleft', 'a'].includes(k)) dir = -1;
+        else if (['arrowdown', 's', 'arrowright', 'd'].includes(k)) dir = 1;
+        
+        if (dir) { 
+            e.preventDefault(); 
+            this.state.index += dir;
+            if (!this.isM) { this.rO = _round(this.rO - (dir * this.aPO)); this._aR(); }
+        }
+    }
 
-        dir && (this.rR(dir), e.preventDefault());
-    }
-    hW(e) {
+    _hW(e) {
         if (this.isM || this.isRC) return;
-        
-        if (this.isRAFThrottled) return;
-        this.isRAFThrottled = true;
-        
-        requestAnimationFrame(() => (this.isRAFThrottled = false, this.rR(Math.sign(e.deltaY))));
-    }
-    hC(e) {
-        if (this.isRC) return;
-        const c = e.target.closest('.opcion');
-        if (!c) return;
-        const tX = +c.dataset.index;
-        if (tX === this.iX) return this._hSS();
-        
         this.isRC = true;
-        const pX = this.iX;
-        this.iX = tX;
+        const dir = Math.sign(e.deltaY);
+        this.state.index += dir;
+        this.rO = _round(this.rO - dir * this.aPO);
+        this._aR();
+        setTimeout(() => this.isRC = false, 100);
+    }
+
+    _hC(e) {
+        const c = e.target.closest('.opcion');
+        if (!c || this.isRC) return;
+        const tX = parseInt(c.dataset.index, 10);
+        if (tX === this.state.index) {
+            window.lastSelectedIndex = this.state.index;
+            return window.onSystemSelect?.(this.mI[this.state.index]);
+        }
         
+        const pX = this.state.index;
         if (!this.isM) {
             let diff = tX - pX;
-            if (Math.abs(diff) > this.hO) {
-                diff -= Math.sign(diff) * this.tO;
-            }
-            this.rO = +((this.rO - diff * this.aPO).toFixed(2));
+            if (Math.abs(diff) > this.hO) diff -= Math.sign(diff) * this.tO;
+            this.rO = _round(this.rO - diff * this.aPO);
             this._aR();
-        } else {
-            setTimeout(() => this.isRC = false, LOCK_DUR_CLICK);
         }
-            
-        this._aS(true)
+        this.state.index = tX;
     }
-    _rS(iL = false) { 
-        const mC = this._cMV(), nIM = this.isM, sRC = iL || mC || this.cR === 0;
-        let dU = false;
-        
-        if (sRC || !nIM) {
-            const d = _cM(this.aPO, this.tO);
-            dU = (d.cR !== this.cR || sRC) && (this.cR = d.cR, true);
-        }
 
-        dU && this.cbs.calculateAndApplyDimensions(this.rEl, this.opc, this.iA, this.aPO, this.tO, nIM);
-        (mC || dU || iL) && this._uV();
-        this._aS(nIM, iL) 
+    _aR() { requestAnimationFrame(() => this.rEl.style.setProperty(this.rVar, `${this.rO.toFixed(2)}deg`)); }
+
+    _rS(iL = false) {
+        const nIM = window.innerWidth <= BREAKPOINT;
+        const mC = nIM !== this.isM;
+        this.isM = nIM;
+        this._applyDimensions(nIM);
+        if (mC || iL) {
+            this.rEl.style.transform = nIM ? 'none' : '';
+            if (nIM) this.rEl.style.setProperty(this.rVar, '0deg');
+            else this._aR();
+        }
+        this._aS(nIM, iL);
+        if (iL) { this._aBG(); this._pABG(); }
     }
-    hR() {
-        _uV(); 
-        this.rRI && cancelAnimationFrame(this.rRI);
-        this.rRI = requestAnimationFrame(() => (this._rS(false), this.rRI = null));
-    }
+
+    _hR() { _uV(); this._rS(false); }
+
     _aEL() {
-        document.addEventListener('keydown', this.hKD);
-        document.addEventListener('wheel', this.hW, { passive: true });
-        this.rEl.addEventListener('click', this.hC);
-        window.addEventListener('resize', this.hR)
+        document.addEventListener('keydown', this._hKD);
+        document.addEventListener('wheel', this._hW, { passive: true });
+        this.rEl.addEventListener('click', this._hC);
+        window.addEventListener('resize', this._hR);
     }
-    _iV(iL = false) { this._rS(iL) }
 }
 
 window.initMainMenu = function () {
     const mC = document.getElementById('main-container');
-    
-    // ** NUEVO: Limpiar la instancia de detail-menu al volver al main-menu **
-    window.detailMenuInstance?.destroy && window.detailMenuInstance.destroy();
-    document.getElementById('detail-container').innerHTML = '';
-    document.getElementById('detail-container').classList.remove('active');
-    // ** FIN NUEVO **
-
+    window.detailMenuInstance?.destroy?.();
     window.ruedaDinamicaInstance?.destroy();
-    window.ruedaDinamicaInstance = null;
     
     mC.innerHTML = menuHTML;
-    
     if (!Array.isArray(window.menuItems)) return;
-    if (!(window.calculateAndApplyDimensions && window.updateViewportCache && window.decodeImage)) return;
-    
-    window.ruedaDinamicaInstance = new RD(window.menuItems, {
-        calculateAndApplyDimensions: window.calculateAndApplyDimensions
-    }, window.lastSelectedIndex || 0) 
+
+    // Recuperamos el índice guardado antes de instanciar
+    const savedIndex = window.lastSelectedIndex || 0;
+    window.ruedaDinamicaInstance = new RD(window.menuItems, savedIndex);
 };
