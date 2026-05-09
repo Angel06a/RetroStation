@@ -1,4 +1,4 @@
-// main-menu.js - VERSIÓN FINAL "ULTRA-PERFORMANCE" (PERSISTENCIA Y CICLO DE VIDA CORREGIDO)
+// main-menu.js - VERSIÓN FINAL "ULTRA-PERFORMANCE" (SIN LAYOUT THRASHING Y DECODIFICACIÓN ASÍNCRONA)
 const menuHTML = `
     <div id="background-container" aria-hidden="true">
         <div id="bg-layer-1" class="background-layer"></div>
@@ -65,46 +65,53 @@ class RD {
             y: Math.sin((i * this.aPO) * D2R)
         }));
 
-        this.state = new Proxy({ index: initialIndex }, {
-            set: (target, prop, value) => {
-                if (prop === 'index') {
-                    const idx = (value + this.tO) % this.tO;
-                    target[prop] = idx;
-                    // Persistencia inmediata cada vez que cambia el índice
-                    window.lastSelectedIndex = idx;
-                    this._onIndexChange(idx);
-                }
-                return true;
-            }
-        });
+        // OPTIMIZACIÓN CENTRAL: Eliminamos el Proxy. Su "overhead" causaba microcortes.
+        this.currentIndex = initialIndex;
 
         Object.assign(this, {
             iA: this.uV.map((_, i) => i * this.aPO),
-            cR: 0, rO: 0, isM: false, isRC: true,
+            cR: 0, rO: 0, isM: false, isRC: false, // Suavizamos el bloqueo de la rueda
             bgCache: new Map(), cBGU: null, rVar: '--rueda-rotacion-actual',
             lazyObserver: null, cBgL: this.bg1,
             IMG_DIR: window.IMG_DIR || '', IMG_EXT: window.IMG_EXT || '.png',
-            BG_DIR: window.BG_DIR || '', BG_EXT: window.BG_EXT || '.jpg'
+            BG_DIR: window.BG_DIR || '', BG_EXT: window.BG_EXT || '.jpg',
+            rafPending: false // Control para Batched DOM Updates
         });
 
         ['_hKD', '_hW', '_hC', '_hR'].forEach(m => this[m] = this[m].bind(this));
         this._init();
     }
 
+    // Nuevo método para centralizar el estado y evitar "Layout Thrashing"
+    setIndex(newIndex, isScrollEvent = false) {
+        const idx = (newIndex + this.tO) % this.tO;
+        if (this.currentIndex === idx) return;
+
+        this.currentIndex = idx;
+        window.lastSelectedIndex = idx;
+
+        // Agrupamos TODAS las actualizaciones del DOM en el próximo frame
+        if (!this.rafPending) {
+            this.rafPending = true;
+            requestAnimationFrame(() => {
+                this._aS(true, isScrollEvent); // Clases y scroll
+                this._aR(); // Rotación CSS
+                this.rafPending = false;
+            });
+        }
+
+        // Delegamos los fondos asíncronamente
+        this._aBG();
+        this._pABG();
+    }
+
     _init() {
         this._gO(() => {
-            this.rO = _round(this.iA[this.state.index] * -1);
+            this.rO = _round(this.iA[this.currentIndex] * -1);
             this._iAR(this.rO);
             this._aEL();
             this._rS(true);
-            setTimeout(() => this.isRC = false, LOCK_DUR_CLICK);
         });
-    }
-
-    _onIndexChange(idx) {
-        this._aS(true);
-        this._aBG();
-        this._pABG();
     }
 
     _pDIB(u) {
@@ -173,6 +180,8 @@ class RD {
     _iAR(r) {
         this.rEl.style.transition = 'none';
         this.rEl.style.setProperty(this.rVar, `${r.toFixed(2)}deg`);
+        // Forzamos el reflow para evitar interpolación no deseada
+        this.rEl.offsetHeight;
         requestAnimationFrame(() => this.rEl.style.transition = '');
     }
 
@@ -185,8 +194,17 @@ class RD {
                     if (img?.hasAttribute('data-src')) {
                         const src = img.getAttribute('data-src');
                         const iL = new Image();
-                        iL.onload = () => { img.src = src; img.removeAttribute('data-src'); };
                         iL.src = src;
+                        // OPTIMIZACIÓN: Prevenimos el bloqueo del hilo principal al cargar nuevas imágenes
+                        if (window.decodeImage) {
+                            window.decodeImage(iL).then(() => {
+                                img.src = src;
+                                img.removeAttribute('data-src');
+                            });
+                        } else {
+                            img.src = src;
+                            img.removeAttribute('data-src');
+                        }
                     }
                     this.lazyObserver.unobserve(entry.target);
                 }
@@ -197,22 +215,23 @@ class RD {
 
     _aS(scroll = false, instant = false) {
         if (this.oA) this.oA.classList.remove('seleccionada');
-        this.oA = this.opc[this.state.index];
+        this.oA = this.opc[this.currentIndex];
         if (this.oA) this.oA.classList.add('seleccionada');
-        if (scroll) this._sTS(this.state.index, instant);
+        if (scroll) this._sTS(this.currentIndex, instant);
     }
 
     _sTS(i, instant = false) {
         if (!this.isM || !this.opc[i]) return;
-        requestAnimationFrame(() => {
-            const iRect = this.opc[i].getBoundingClientRect(), cRect = this.rEl.getBoundingClientRect();
-            const tS = this.rEl.scrollTop + iRect.top - cRect.top + iRect.height / 2 - cRect.height / 2;
-            this.rEl.scrollTo({ top: tS, behavior: instant ? 'auto' : 'smooth' });
-        });
+        // La lectura de getBoundingClientRect() ya no está anidada en otro requestAnimationFrame
+        // para evitar el temido "Layout Thrashing".
+        const iRect = this.opc[i].getBoundingClientRect();
+        const cRect = this.rEl.getBoundingClientRect();
+        const tS = this.rEl.scrollTop + iRect.top - cRect.top + iRect.height / 2 - cRect.height / 2;
+        this.rEl.scrollTo({ top: tS, behavior: instant ? 'auto' : 'smooth' });
     }
 
     _aBG() {
-        const bgUrl = `${this.BG_DIR}${this.mI[this.state.index]}${this.BG_EXT}`;
+        const bgUrl = `${this.BG_DIR}${this.mI[this.currentIndex]}${this.BG_EXT}`;
         const fBU = `url('${bgUrl}')`;
         if (this.cBGU === fBU) return;
 
@@ -232,7 +251,7 @@ class RD {
         }, DEBOUNCE_BG_MS);
     }
 
-    _pABG(i = this.state.index) {
+    _pABG(i = this.currentIndex) {
         [-1, 1].forEach(offset => {
             const idx = (i + offset + this.tO) % this.tO;
             this._pDIB(`${this.BG_DIR}${this.mI[idx]}${this.BG_EXT}`);
@@ -243,8 +262,8 @@ class RD {
         const k = e.key.toLowerCase();
         if (k === 'enter') { 
             e.preventDefault(); 
-            window.lastSelectedIndex = this.state.index; 
-            return window.onSystemSelect?.(this.mI[this.state.index]); 
+            window.lastSelectedIndex = this.currentIndex; 
+            return window.onSystemSelect?.(this.mI[this.currentIndex]); 
         }
         let dir = 0;
         if (['arrowup', 'w', 'arrowleft', 'a'].includes(k)) dir = -1;
@@ -252,41 +271,46 @@ class RD {
         
         if (dir) { 
             e.preventDefault(); 
-            this.state.index += dir;
-            if (!this.isM) { this.rO = _round(this.rO - (dir * this.aPO)); this._aR(); }
+            if (!this.isM) { this.rO = _round(this.rO - (dir * this.aPO)); }
+            this.setIndex(this.currentIndex + dir);
         }
     }
 
     _hW(e) {
         if (this.isM || this.isRC) return;
+        
+        // Reducimos el tiempo de bloqueo a 50ms (antes 100ms) para que 
+        // los giros rápidos con el scroll del ratón no se sientan atascados.
         this.isRC = true;
+        setTimeout(() => this.isRC = false, 50);
+
         const dir = Math.sign(e.deltaY);
-        this.state.index += dir;
         this.rO = _round(this.rO - dir * this.aPO);
-        this._aR();
-        setTimeout(() => this.isRC = false, 100);
+        this.setIndex(this.currentIndex + dir, true);
     }
 
     _hC(e) {
         const c = e.target.closest('.opcion');
-        if (!c || this.isRC) return;
+        if (!c) return;
+        
         const tX = parseInt(c.dataset.index, 10);
-        if (tX === this.state.index) {
-            window.lastSelectedIndex = this.state.index;
-            return window.onSystemSelect?.(this.mI[this.state.index]);
+        if (tX === this.currentIndex) {
+            window.lastSelectedIndex = this.currentIndex;
+            return window.onSystemSelect?.(this.mI[this.currentIndex]);
         }
         
-        const pX = this.state.index;
+        const pX = this.currentIndex;
         if (!this.isM) {
             let diff = tX - pX;
             if (Math.abs(diff) > this.hO) diff -= Math.sign(diff) * this.tO;
             this.rO = _round(this.rO - diff * this.aPO);
-            this._aR();
         }
-        this.state.index = tX;
+        this.setIndex(tX);
     }
 
-    _aR() { requestAnimationFrame(() => this.rEl.style.setProperty(this.rVar, `${this.rO.toFixed(2)}deg`)); }
+    _aR() { 
+        this.rEl.style.setProperty(this.rVar, `${this.rO.toFixed(2)}deg`); 
+    }
 
     _rS(iL = false) {
         const nIM = window.innerWidth <= BREAKPOINT;
@@ -320,7 +344,6 @@ window.initMainMenu = function () {
     mC.innerHTML = menuHTML;
     if (!Array.isArray(window.menuItems)) return;
 
-    // Recuperamos el índice guardado antes de instanciar
     const savedIndex = window.lastSelectedIndex || 0;
     window.ruedaDinamicaInstance = new RD(window.menuItems, savedIndex);
 };
