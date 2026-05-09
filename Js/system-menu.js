@@ -1,4 +1,4 @@
-// system-menu.js (Optimizado: Navegación Proactiva y Gestión de Ciclo de Vida)
+// system-menu.js (Optimizado: Delegación de Eventos y Gestión de Memoria)
 const ICONS_DIR = "Icons/"; 
 
 // ** ESTILOS DINÁMICOS MEJORADOS **
@@ -330,8 +330,11 @@ function loadGameListScript(sN) {
 }
 
 function handleGameItemClick(e) {
+    // OPTIMIZACIÓN: Buscamos el ítem afectado mediante el target del evento delegado
+    const item = e.target.closest('.game-item');
+    if (!item) return;
+    
     e.preventDefault(); 
-    const item = e.currentTarget; 
     const name = item.dataset.name;
     const downloadUrl = item.dataset.url;
     const imgEl = item.querySelector('.game-item-img');
@@ -340,6 +343,20 @@ function handleGameItemClick(e) {
     if (window.showDetailMenu) {
         window.showDetailMenu({ name, downloadUrl, imgUrl });
     }
+}
+
+function handleGameItemHover(e) {
+    // OPTIMIZACIÓN: Solo ejecutamos el repintado si cambiamos realmente de ítem
+    const item = e.target.closest('.game-item');
+    if (!item) return;
+
+    const idx = parseInt(item.dataset.index, 10);
+    if (currentGridIndex === idx) return;
+
+    currentGridIndex = idx;
+    const previous = document.querySelector('.game-item-focused');
+    if (previous && previous !== item) previous.classList.remove('game-item-focused');
+    item.classList.add('game-item-focused');
 }
 
 function renderGameList(g, sN) {
@@ -384,17 +401,16 @@ function renderGameList(g, sN) {
         }
     }), { root: c, rootMargin: '400px', threshold: 0 });
 
-    const allItems = c.querySelectorAll('.game-item');
-    allItems.forEach((item, idx) => {
-        gameImageObserver.observe(item);
-        item.addEventListener('click', handleGameItemClick);
-        item.addEventListener('mouseenter', () => {
-            currentGridIndex = idx;
-            const previous = document.querySelector('.game-item-focused');
-            if (previous) previous.classList.remove('game-item-focused');
-            item.classList.add('game-item-focused');
-        });
-    });
+    const grid = document.getElementById('game-grid');
+    const allItems = grid.querySelectorAll('.game-item');
+    
+    // OPTIMIZACIÓN CENTRAL (Event Delegation): 
+    // Mantenemos solo la interacción estrictamente necesaria para el IntersectionObserver.
+    allItems.forEach(item => gameImageObserver.observe(item));
+
+    // Sustituimos los (g.length * 2) event listeners por solo 2 globales en la grilla.
+    grid.addEventListener('click', handleGameItemClick);
+    grid.addEventListener('mouseover', handleGameItemHover);
 }
 
 async function renderSystemMenu(sN) {
